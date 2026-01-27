@@ -1,0 +1,26 @@
+# DateStack Client Configuration
+# Copy this file to ~/.datestack/config.yaml and edit with your settings
+
+server:
+  # URL of your DateStack server
+  url: "https://datestack.example.com"
+  # API key generated from Settings > API Keys
+  api_key: "dsk_your_api_key_here"
+
+calendar:
+  # Name for this calendar source (shown in the web UI)
+  source_name: "My Mac"
+  # Calendars to exclude from sync
+  exclude_calendars:
+    - "Holidays"
+    - "Birthdays"
+  # Events containing these keywords will be excluded
+  exclude_keywords:
+    - "BLOCKED"
+    - "OOO"
+  # Number of days ahead to sync
+  days_ahead: 14
+
+sync:
+  # Interval in minutes for daemon mode
+  interval_minutes: 15

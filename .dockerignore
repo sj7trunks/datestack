@@ -1,0 +1,50 @@
+# Dependencies (will be installed in Docker)
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Git
+.git/
+.gitignore
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+.pytest_cache/
+
+# Documentation
+*.md
+!README.md
+
+# Client (not needed in Docker)
+client/
+
+# Build outputs (will be built in Docker)
+server/dist/
+frontend/dist/
