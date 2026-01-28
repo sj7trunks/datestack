@@ -14,9 +14,11 @@ router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
   const { start, end, source } = req.query;
 
   let sql = `
-    SELECT e.*, cs.name as source_name, cs.color as source_color
+    SELECT e.*, cs.name as source_name,
+      COALESCE(cc.color, cs.color) as source_color
     FROM events e
     JOIN calendar_sources cs ON e.source_id = cs.id
+    LEFT JOIN calendar_colors cc ON cc.user_id = cs.user_id AND cc.calendar_name = e.calendar_name
     WHERE cs.user_id = ?
   `;
   const params: any[] = [req.user!.id];
@@ -107,6 +109,18 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
         ]
       );
       inserted++;
+    }
+
+    // Auto-assign colors for new calendar_names
+    const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#6366F1'];
+    const distinctCalendars = [...new Set(events.map((e: any) => e.calendar_name).filter(Boolean))];
+    for (const calName of distinctCalendars) {
+      const existing = queryOne('SELECT id FROM calendar_colors WHERE user_id = ? AND calendar_name = ?', [req.user!.id, calName]);
+      if (!existing) {
+        const countResult = query<{ cnt: number }>('SELECT COUNT(*) as cnt FROM calendar_colors WHERE user_id = ?', [req.user!.id]);
+        const idx = (countResult[0]?.cnt || 0) % palette.length;
+        run('INSERT INTO calendar_colors (user_id, calendar_name, color) VALUES (?, ?, ?)', [req.user!.id, calName, palette[idx]]);
+      }
     }
 
     // Update last_sync timestamp

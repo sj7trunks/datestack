@@ -1,6 +1,6 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { query, queryOne, run, AgendaItem } from '../database';
-import { AuthRequest, requireAnyAuth } from '../middleware/auth';
+import { AuthRequest, requireAnyAuth, requireSystemKey } from '../middleware/auth';
 
 const router = Router();
 
@@ -183,6 +183,26 @@ router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Rollover error:', error);
+    res.status(500).json({ error: 'Failed to rollover agenda items' });
+  }
+});
+
+// POST /api/agenda/rollover-all - System-level rollover for all users
+router.post('/rollover-all', requireSystemKey, (req: Request, res: Response) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    const result = run(
+      'UPDATE agenda_items SET date = ? WHERE completed = 0 AND date < ?',
+      [today, today]
+    );
+
+    res.json({
+      message: 'System rollover complete',
+      items_moved: result.changes,
+    });
+  } catch (error) {
+    console.error('System rollover error:', error);
     res.status(500).json({ error: 'Failed to rollover agenda items' });
   }
 });

@@ -3,6 +3,25 @@ import { parseISO } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 import type { CalendarEvent } from '../api/client'
 
+function linkify(text: string): string {
+  // URLs
+  let result = text.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  )
+  // Email addresses (not already inside an href)
+  result = result.replace(
+    /(?<!=")([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
+    '<a href="mailto:$1">$1</a>'
+  )
+  // Phone numbers: +1..., (xxx) xxx-xxxx, xxx-xxx-xxxx
+  result = result.replace(
+    /(?<![\/\w])(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})(?![\/\w])/g,
+    '<a href="tel:$1">$1</a>'
+  )
+  return result
+}
+
 interface EventCardProps {
   event: CalendarEvent
   timezone: string
@@ -65,7 +84,10 @@ export default function EventCard({ event, timezone }: EventCardProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="text-sm text-gray-700 dark:text-gray-300">{event.location}</span>
+              <span
+                className="text-sm text-gray-700 dark:text-gray-300 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: linkify(event.location) }}
+              />
             </div>
           )}
           {event.notes && (
@@ -75,7 +97,7 @@ export default function EventCard({ event, timezone }: EventCardProps) {
               </svg>
               <div
                 className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline"
-                dangerouslySetInnerHTML={{ __html: event.notes }}
+                dangerouslySetInnerHTML={{ __html: linkify(event.notes.replace(/\n/g, '<br>')) }}
               />
             </div>
           )}

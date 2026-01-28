@@ -233,6 +233,31 @@ export async function regenerateShareToken(): Promise<AvailabilitySettings> {
   return handleResponse(response);
 }
 
+// Calendar Colors
+export interface CalendarColor {
+  id: number;
+  user_id: number;
+  calendar_name: string;
+  color: string;
+}
+
+export async function getCalendarColors(): Promise<CalendarColor[]> {
+  const response = await fetch(`${API_BASE}/calendar-colors`, {
+    credentials: 'include',
+  });
+  return handleResponse(response);
+}
+
+export async function updateCalendarColor(name: string, color: string): Promise<CalendarColor> {
+  const response = await fetch(`${API_BASE}/calendar-colors/${encodeURIComponent(name)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ color }),
+  });
+  return handleResponse(response);
+}
+
 // Public availability
 export interface TimeSlot {
   start: string;

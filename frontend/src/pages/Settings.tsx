@@ -10,6 +10,8 @@ import {
   getAvailabilitySettings,
   updateAvailabilitySettings,
   regenerateShareToken,
+  getCalendarColors,
+  updateCalendarColor,
 } from '../api/client'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -28,6 +30,19 @@ export default function Settings() {
   const { data: sources = [], isLoading: sourcesLoading } = useQuery({
     queryKey: ['sources'],
     queryFn: getSources,
+  })
+
+  const { data: calendarColors = [], isLoading: colorsLoading } = useQuery({
+    queryKey: ['calendarColors'],
+    queryFn: getCalendarColors,
+  })
+
+  const updateCalendarColorMutation = useMutation({
+    mutationFn: ({ name, color }: { name: string; color: string }) => updateCalendarColor(name, color),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendarColors'] })
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+    },
   })
 
   const { data: availability, isLoading: availabilityLoading } = useQuery({
@@ -234,6 +249,49 @@ export default function Settings() {
                         onClick={() => updateSourceMutation.mutate({ id: source.id, color })}
                         className={`w-6 h-6 rounded-full border-2 ${
                           source.color === color ? 'border-gray-400 dark:border-gray-300' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={`Set color to ${color}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Calendar Colors Section */}
+        <section>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Calendar Colors</h2>
+
+          {colorsLoading ? (
+            <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+          ) : calendarColors.length === 0 ? (
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              No calendars yet. Colors will appear after syncing events.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {calendarColors.map((cc) => (
+                <div
+                  key={cc.id}
+                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: cc.color }}
+                    />
+                    <span className="font-medium text-gray-900 dark:text-white">{cc.calendar_name}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {colors.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => updateCalendarColorMutation.mutate({ name: cc.calendar_name, color })}
+                        className={`w-6 h-6 rounded-full border-2 ${
+                          cc.color === color ? 'border-gray-400 dark:border-gray-300' : 'border-transparent'
                         }`}
                         style={{ backgroundColor: color }}
                         title={`Set color to ${color}`}
