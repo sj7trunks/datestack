@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, addDays, startOfDay, isSameDay } from 'date-fns'
-import { getEvents, getAgendaItems, logout } from '../api/client'
+import { getEvents, getAgendaItems, rolloverAgenda, logout } from '../api/client'
 import CalendarView from '../components/CalendarView'
 
 type ViewDays = 1 | 3 | 7 | 14
@@ -12,8 +12,22 @@ export default function Calendar() {
   const queryClient = useQueryClient()
   const [startDate, setStartDate] = useState(() => startOfDay(new Date()))
   const [viewDays, setViewDays] = useState<ViewDays>(7)
-  const [timezone] = useState('America/Los_Angeles') // PST by default
+  const [timezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const rolledOver = useRef(false)
 
+  // Rollover incomplete past agenda items to today on page load
+  useEffect(() => {
+    if (rolledOver.current) return
+    rolledOver.current = true
+    const today = format(startOfDay(new Date()), 'yyyy-MM-dd')
+    rolloverAgenda(today).then((result) => {
+      if (result.items_moved > 0) {
+        queryClient.invalidateQueries({ queryKey: ['agenda'] })
+      }
+    }).catch(() => {
+      // Silently ignore rollover failures
+    })
+  }, [queryClient])
 
   const endDate = useMemo(() => addDays(startDate, viewDays), [startDate, viewDays])
 

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import { query, queryOne, run, AvailabilitySettings, Event, CalendarSource } from '../database';
+import { query, queryOne, run, AvailabilitySettings, Event, CalendarSource, getToday } from '../database';
 import { AuthRequest, requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -167,8 +167,8 @@ router.get('/public/:token', (req: Request, res: Response) => {
     }
 
     // Get user's events for the next N days
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStr = getToday();
+    const startOfToday = new Date(todayStr + 'T00:00:00');
     const endDate = new Date(startOfToday.getTime() + settings.days_ahead * 24 * 60 * 60 * 1000);
 
     // Get all calendar sources for this user

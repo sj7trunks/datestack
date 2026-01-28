@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { query, queryOne, run, AgendaItem } from '../database';
+import { query, queryOne, run, AgendaItem, getToday } from '../database';
 import { AuthRequest, requireAnyAuth, requireSystemKey } from '../middleware/auth';
 
 const router = Router();
@@ -8,8 +8,11 @@ const router = Router();
 router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
   const { date, include_completed } = req.query;
 
-  // Default to today's date
-  const targetDate = date || new Date().toISOString().split('T')[0];
+  if (!date) {
+    return res.status(400).json({ error: 'date query parameter is required' });
+  }
+
+  const targetDate = date;
 
   let sql = 'SELECT * FROM agenda_items WHERE user_id = ? AND date = ?';
   const params: any[] = [req.user!.id, targetDate];
@@ -63,8 +66,11 @@ router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  // Default to today's date
-  const targetDate = date || new Date().toISOString().split('T')[0];
+  if (!date) {
+    return res.status(400).json({ error: 'date is required' });
+  }
+
+  const targetDate = date;
 
   try {
     const result = run(
@@ -169,7 +175,13 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 
 // POST /api/agenda/rollover - Move incomplete items to today
 router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
-  const today = new Date().toISOString().split('T')[0];
+  const { date } = req.body;
+
+  if (!date) {
+    return res.status(400).json({ error: 'date is required' });
+  }
+
+  const today = date;
 
   try {
     const result = run(
@@ -189,7 +201,7 @@ router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
 
 // POST /api/agenda/rollover-all - System-level rollover for all users
 router.post('/rollover-all', requireSystemKey, (req: Request, res: Response) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday();
 
   try {
     const result = run(

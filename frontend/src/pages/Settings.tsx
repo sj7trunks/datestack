@@ -6,7 +6,6 @@ import {
   createApiKey,
   deleteApiKey,
   getSources,
-  updateSource,
   getAvailabilitySettings,
   updateAvailabilitySettings,
   regenerateShareToken,
@@ -77,14 +76,6 @@ export default function Settings() {
     mutationFn: (id: number) => deleteApiKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] })
-    },
-  })
-
-  const updateSourceMutation = useMutation({
-    mutationFn: ({ id, color }: { id: number; color: string }) => updateSource(id, { color }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources'] })
-      queryClient.invalidateQueries({ queryKey: ['events'] })
     },
   })
 
@@ -226,34 +217,15 @@ export default function Settings() {
               {sources.map((source) => (
                 <div
                   key={source.id}
-                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700"
+                  className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700"
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: source.color }}
-                    />
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{source.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {source.last_sync
-                          ? `Last sync: ${new Date(source.last_sync).toLocaleString()}`
-                          : 'Never synced'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    {colors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => updateSourceMutation.mutate({ id: source.id, color })}
-                        className={`w-6 h-6 rounded-full border-2 ${
-                          source.color === color ? 'border-gray-400 dark:border-gray-300' : 'border-transparent'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title={`Set color to ${color}`}
-                      />
-                    ))}
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{source.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {source.last_sync
+                        ? `Last sync: ${new Date(source.last_sync).toLocaleString()}`
+                        : 'Never synced'}
+                    </p>
                   </div>
                 </div>
               ))}

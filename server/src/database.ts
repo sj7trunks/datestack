@@ -171,6 +171,12 @@ export function run(sql: string, params: any[] = []): { changes: number; lastIns
   return { changes, lastInsertRowid: lastId };
 }
 
+// Helper: get "today" in the configured timezone (for headless/cron use only)
+export function getToday(): string {
+  const tz = process.env.TIMEZONE || 'America/Los_Angeles';
+  return new Date().toLocaleDateString('en-CA', { timeZone: tz });
+}
+
 // Type definitions for database rows
 export interface User {
   id: number;

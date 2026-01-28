@@ -12,12 +12,12 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Multi-source support** — Sync calendars from multiple Macs to a single view
 - **14-day horizon** — Always see two weeks ahead
 - **Behind firewalls** — Client pushes data out, so corporate firewalls aren't a problem
-- **Color-coded sources** — Each calendar source gets its own color (customizable)
+- **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings)
 - **Smart filtering** — Exclude specific calendars or events containing certain keywords
 
 ### Agenda / Task List
 - **Quick capture** — Add simple one-line tasks
-- **Daily rollover** — Unfinished items automatically carry forward
+- **Automatic rollover** — Unfinished items from past days automatically move to today on page load
 - **Completion tracking** — Check off items with visual strikethrough
 - **Undo support** — Accidentally checked something? Just uncheck it
 - **Auto-archive** — Completed items archived daily with completion date
@@ -27,12 +27,18 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Day-by-day navigation** — Step forward or back one day at a time
 - **Expandable notes** — Keep the view clean, expand details when needed
 - **Smart sorting** — Agenda first, then events in chronological order
-- **Timezone aware** — Shows PST by default, or your local time when traveling
+- **Timezone aware** — Auto-detects browser timezone, shows local time when traveling
 
 ### Notifications
 - **ntfy integration** — Push notifications to your phone
 - **Configurable timing** — Default 5 minutes before events
 - **Works anywhere** — Use public ntfy.sh or your own server
+
+### Timezone Handling
+- **Client-authoritative dates** — The server never computes "today" for user-facing requests. All API endpoints that need a date (`GET /api/agenda`, `POST /api/agenda`, `POST /api/agenda/rollover`) require the client to send the date explicitly. This prevents UTC vs local timezone mismatches.
+- **Browser auto-detection** — The frontend uses `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect the user's timezone automatically. No hardcoded timezone.
+- **Server `TIMEZONE` env var** — Only used for headless/cron operations (`POST /api/agenda/rollover-all`, sync cleanup) where there is no client. Defaults to `America/Los_Angeles`.
+- **`getToday()` helper** — Server-side helper in `database.ts` that returns today's date string using the `TIMEZONE` env var. Only used by rollover-all and sync cleanup, never for user-facing requests.
 
 ---
 
@@ -203,6 +209,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=/app/data/datestack.db
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-random-string}
+      - TIMEZONE=America/Los_Angeles
     volumes:
       - datestack_data:/app/data
     restart: unless-stopped

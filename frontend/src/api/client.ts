@@ -182,10 +182,12 @@ export async function deleteAgendaItem(id: number): Promise<void> {
   await handleResponse(response);
 }
 
-export async function rolloverAgenda(): Promise<{ items_moved: number }> {
+export async function rolloverAgenda(date: string): Promise<{ items_moved: number }> {
   const response = await fetch(`${API_BASE}/agenda/rollover`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    body: JSON.stringify({ date }),
   });
   return handleResponse(response);
 }

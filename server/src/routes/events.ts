@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, queryOne, run, Event, CalendarSource, getDb, saveDatabase } from '../database';
+import { query, queryOne, run, Event, CalendarSource, getDb, saveDatabase, getToday } from '../database';
 import { AuthRequest, requireAuth, requireApiKey } from '../middleware/auth';
 
 const router = Router();
@@ -72,10 +72,10 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
       source = queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid])!;
     }
 
-    // Calculate the date range for cleanup (14 days from now)
-    const now = new Date();
-    const futureDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    // Calculate the date range for cleanup (14 days from today)
+    const todayStr = getToday();
+    const futureDate = new Date(new Date(todayStr + 'T00:00:00').getTime() + 14 * 24 * 60 * 60 * 1000);
+    const startOfToday = new Date(todayStr + 'T00:00:00').toISOString();
     const endOfRange = futureDate.toISOString();
 
     const db = getDb();
