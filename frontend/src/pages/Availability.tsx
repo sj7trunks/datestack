@@ -79,25 +79,38 @@ export default function Availability() {
               </div>
 
               <div className="p-4">
-                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-2">
-                  {day.slots.map((slot, index) => {
-                    const slotTime = parseISO(slot.start)
-                    const timeLabel = format(slotTime, 'h:mm a')
-
-                    return (
-                      <div
-                        key={index}
-                        className={`px-2 py-1.5 text-xs rounded text-center ${
-                          slot.status === 'free'
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                            : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
-                        }`}
-                        title={slot.status === 'free' ? 'Available' : 'Busy'}
-                      >
-                        {timeLabel}
+                <div className="flex gap-2 overflow-x-auto">
+                  {(() => {
+                    const hourGroups: Record<string, typeof day.slots> = {}
+                    day.slots.forEach((slot) => {
+                      const slotTime = parseISO(slot.start)
+                      const hourKey = format(slotTime, 'h a')
+                      if (!hourGroups[hourKey]) hourGroups[hourKey] = []
+                      hourGroups[hourKey].push(slot)
+                    })
+                    return Object.entries(hourGroups).map(([hour, slots]) => (
+                      <div key={hour} className="flex flex-col items-center gap-1">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{hour}</span>
+                        {slots.map((slot, i) => {
+                          const slotTime = parseISO(slot.start)
+                          const timeLabel = format(slotTime, 'h:mm')
+                          return (
+                            <div
+                              key={i}
+                              className={`px-2 py-1.5 text-xs rounded text-center min-w-[3.5rem] ${
+                                slot.status === 'free'
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                              }`}
+                              title={slot.status === 'free' ? 'Available' : 'Busy'}
+                            >
+                              {timeLabel}
+                            </div>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
+                    ))
+                  })()}
                 </div>
 
                 {/* Legend */}

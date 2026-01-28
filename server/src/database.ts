@@ -81,6 +81,15 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Calendar Colors table (per calendar_name)
+    CREATE TABLE IF NOT EXISTS calendar_colors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      calendar_name TEXT NOT NULL,
+      color TEXT NOT NULL,
+      UNIQUE(user_id, calendar_name)
+    );
+
     -- Availability Settings table
     CREATE TABLE IF NOT EXISTS availability_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

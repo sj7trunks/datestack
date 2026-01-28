@@ -114,3 +114,18 @@ export function requireAnyAuth(req: AuthRequest, res: Response, next: NextFuncti
 
   return res.status(401).json({ error: 'Authentication required' });
 }
+
+// Middleware: Require system API key (for system-level operations)
+export function requireSystemKey(req: Request, res: Response, next: NextFunction) {
+  const systemKey = process.env.SYSTEM_API_KEY;
+  if (!systemKey) {
+    return res.status(503).json({ error: 'System API key not configured' });
+  }
+
+  const providedKey = req.headers['x-system-key'] as string;
+  if (!providedKey || providedKey !== systemKey) {
+    return res.status(401).json({ error: 'Invalid system key' });
+  }
+
+  next();
+}
