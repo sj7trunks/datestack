@@ -11,6 +11,8 @@ export default function AgendaList({ items, date }: AgendaListProps) {
   const queryClient = useQueryClient()
   const [newItemText, setNewItemText] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editText, setEditText] = useState('')
 
   const createMutation = useMutation({
     mutationFn: (text: string) => createAgendaItem(text, date),
@@ -22,10 +24,12 @@ export default function AgendaList({ items, date }: AgendaListProps) {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, completed }: { id: number; completed: boolean }) =>
-      updateAgendaItem(id, { completed }),
+    mutationFn: ({ id, text, completed }: { id: number; text?: string; completed?: boolean }) =>
+      updateAgendaItem(id, { text, completed }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda'] })
+      setEditingId(null)
+      setEditText('')
     },
   })
 
@@ -45,6 +49,34 @@ export default function AgendaList({ items, date }: AgendaListProps) {
 
   const toggleComplete = (item: AgendaItem) => {
     updateMutation.mutate({ id: item.id, completed: !item.completed })
+  }
+
+  const startEditing = (item: AgendaItem) => {
+    setEditingId(item.id)
+    setEditText(item.text)
+  }
+
+  const saveEdit = (id: number) => {
+    const trimmed = editText.trim()
+    if (trimmed && trimmed !== items.find(i => i.id === id)?.text) {
+      updateMutation.mutate({ id, text: trimmed })
+    } else {
+      cancelEdit()
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, id: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveEdit(id)
+    } else if (e.key === 'Escape') {
+      cancelEdit()
+    }
   }
 
   return (
@@ -83,13 +115,28 @@ export default function AgendaList({ items, date }: AgendaListProps) {
                 </svg>
               )}
             </button>
-            <span
-              className={`flex-1 text-sm ${
-                item.completed ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-white'
-              }`}
-            >
-              {item.text}
-            </span>
+            {editingId === item.id ? (
+              <input
+                type="text"
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onBlur={() => saveEdit(item.id)}
+                onKeyDown={(e) => handleEditKeyDown(e, item.id)}
+                autoFocus
+                className="flex-1 px-1 py-0 text-sm border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              />
+            ) : (
+              <span
+                onClick={() => !item.completed && startEditing(item)}
+                className={`flex-1 text-sm ${
+                  item.completed
+                    ? 'text-gray-400 dark:text-gray-500 line-through'
+                    : 'text-gray-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+              >
+                {item.text}
+              </span>
+            )}
             <button
               onClick={() => deleteMutation.mutate(item.id)}
               className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-opacity"
