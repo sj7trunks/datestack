@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, parseISO, isToday, isTomorrow } from 'date-fns'
 import { getPublicAvailability } from '../api/client'
+import Footer from '../components/Footer'
 
 export default function Availability() {
   const { token } = useParams<{ token: string }>()
@@ -50,7 +51,7 @@ export default function Availability() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Availability</h1>
@@ -129,10 +130,8 @@ export default function Availability() {
           ))}
         </div>
 
-        <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-          Powered by DateStack
-        </div>
       </main>
+      <Footer />
     </div>
   )
 }

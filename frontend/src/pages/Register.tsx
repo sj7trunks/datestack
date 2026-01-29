@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { register } from '../api/client'
+import Footer from '../components/Footer'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -37,8 +38,9 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">DateStack</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">Create your account</p>
@@ -113,7 +115,9 @@ export default function Register() {
             </Link>
           </p>
         </form>
+        </div>
       </div>
+      <Footer />
     </div>
   )
 }

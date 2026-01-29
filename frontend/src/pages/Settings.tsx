@@ -13,10 +13,20 @@ import {
   updateCalendarColor,
 } from '../api/client'
 import { useTheme } from '../contexts/ThemeContext'
+import Footer from '../components/Footer'
+
+type ViewDays = 1 | 3 | 7 | 14
 
 export default function Settings() {
   const queryClient = useQueryClient()
   const { theme, setTheme } = useTheme()
+  const [defaultViewDays, setDefaultViewDays] = useState<ViewDays>(() => {
+    const stored = localStorage.getItem('defaultViewDays')
+    if (stored && ['1', '3', '7', '14'].includes(stored)) {
+      return parseInt(stored, 10) as ViewDays
+    }
+    return 7
+  })
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState(false)
@@ -98,7 +108,7 @@ export default function Settings() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Settings</h1>
@@ -126,6 +136,32 @@ export default function Settings() {
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* Calendar View Section */}
+        <section>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Calendar View</h2>
+          <div className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+            <p className="font-medium text-gray-900 dark:text-white mb-3">Default View</p>
+            <div className="flex gap-2">
+              {([1, 3, 7, 14] as ViewDays[]).map((days) => (
+                <button
+                  key={days}
+                  onClick={() => {
+                    setDefaultViewDays(days)
+                    localStorage.setItem('defaultViewDays', days.toString())
+                  }}
+                  className={`px-4 py-2 text-sm rounded-md border ${
+                    defaultViewDays === days
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {days} {days === 1 ? 'day' : 'days'}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -380,6 +416,7 @@ export default function Settings() {
           )}
         </section>
       </main>
+      <Footer />
     </div>
   )
 }

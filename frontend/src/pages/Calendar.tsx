@@ -4,14 +4,23 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, addDays, startOfDay, isSameDay } from 'date-fns'
 import { getEvents, getAgendaItems, rolloverAgenda, logout } from '../api/client'
 import CalendarView from '../components/CalendarView'
+import Footer from '../components/Footer'
 
 type ViewDays = 1 | 3 | 7 | 14
+
+function getDefaultViewDays(): ViewDays {
+  const stored = localStorage.getItem('defaultViewDays')
+  if (stored && ['1', '3', '7', '14'].includes(stored)) {
+    return parseInt(stored, 10) as ViewDays
+  }
+  return 7
+}
 
 export default function Calendar() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [startDate, setStartDate] = useState(() => startOfDay(new Date()))
-  const [viewDays, setViewDays] = useState<ViewDays>(7)
+  const [viewDays, setViewDays] = useState<ViewDays>(getDefaultViewDays)
   const [timezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)
   const rolledOver = useRef(false)
 
@@ -53,8 +62,8 @@ export default function Calendar() {
   }
 
   const goToToday = () => setStartDate(startOfDay(new Date()))
-  const goPrev = () => setStartDate(prev => addDays(prev, -1))
-  const goNext = () => setStartDate(prev => addDays(prev, 1))
+  const goPrev = () => setStartDate(prev => addDays(prev, -viewDays))
+  const goNext = () => setStartDate(prev => addDays(prev, viewDays))
 
   // Group events and agenda by date
   const dayData = useMemo(() => {
@@ -84,7 +93,7 @@ export default function Calendar() {
   const isLoading = eventsLoading || agendaLoading
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
@@ -181,6 +190,7 @@ export default function Calendar() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   )
 }
