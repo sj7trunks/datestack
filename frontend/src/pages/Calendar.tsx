@@ -34,6 +34,7 @@ export default function Calendar() {
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ['events', startDate.toISOString(), endDate.toISOString()],
     queryFn: () => getEvents(startDate.toISOString(), endDate.toISOString()),
+    refetchInterval: 60000, // Auto-refresh every minute
   })
 
   const { data: agendaItems = [], isLoading: agendaLoading } = useQuery({
@@ -42,6 +43,7 @@ export default function Calendar() {
       format(startDate, 'yyyy-MM-dd'),
       format(addDays(endDate, -1), 'yyyy-MM-dd')
     ),
+    refetchInterval: 60000, // Auto-refresh every minute
   })
 
   const handleLogout = async () => {
