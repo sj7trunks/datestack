@@ -66,7 +66,7 @@ calendar:
   days_ahead: 14                 # How many days to sync
 
 sync:
-  interval_minutes: 15           # For daemon mode
+  interval_minutes: 5            # Sync every 5 minutes in daemon mode
 ```
 
 ## Usage
@@ -84,7 +84,7 @@ source venv/bin/activate
 # One-time sync
 datestack sync
 
-# Run continuously (syncs every 15 minutes)
+# Run continuously (syncs based on interval_minutes in config)
 datestack sync --daemon
 
 # Force a complete re-sync
@@ -142,6 +142,11 @@ Create `~/Library/LaunchAgents/com.datestack.sync.plist`:
         <string>sync</string>
         <string>--daemon</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -153,6 +158,8 @@ Create `~/Library/LaunchAgents/com.datestack.sync.plist`:
 </dict>
 </plist>
 ```
+
+**Note:** The `EnvironmentVariables` section is required because launchd doesn't inherit your shell's PATH. The path `/opt/homebrew/bin` is where Homebrew installs icalBuddy on Apple Silicon Macs. For Intel Macs, use `/usr/local/bin` instead.
 
 Then load it:
 
