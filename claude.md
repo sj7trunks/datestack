@@ -17,14 +17,16 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 
 ### Agenda / Task List
 - **Quick capture** — Add simple one-line tasks
+- **Inline editing** — Click on any task to edit its text (Enter to save, Escape to cancel)
 - **Automatic rollover** — Unfinished items from past days automatically move to today on page load
 - **Completion tracking** — Check off items with visual strikethrough
 - **Undo support** — Accidentally checked something? Just uncheck it
 - **Auto-archive** — Completed items archived daily with completion date
 
 ### Mobile-First Web Interface
-- **Flexible views** — 1 day, 3 days, 7 days, or 14 days
-- **Day-by-day navigation** — Step forward or back one day at a time
+- **Flexible views** — 1 day, 3 days, 7 days, or 14 days (default configurable in Settings)
+- **Smart navigation** — Forward/back buttons move by the current view size (7-day view moves 7 days at a time)
+- **Auto-refresh** — Calendar updates every minute while the page is open
 - **Expandable notes** — Keep the view clean, expand details when needed
 - **Smart sorting** — Agenda first, then events in chronological order
 - **Timezone aware** — Auto-detects browser timezone, shows local time when traveling
