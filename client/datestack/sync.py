@@ -91,10 +91,28 @@ def get_events_from_icalbuddy(
 
         events = parse_icalbuddy_output(result.stdout)
 
-        # Also get all-day events
-        cmd_allday = cmd.copy()
-        cmd_allday.remove("-ea")
-        cmd_allday.extend(["-oa"])  # Only all-day events
+        # Also get all-day events with a separate command
+        # Build fresh command with -oa instead of -ea (flags must come before the command)
+        cmd_allday = [
+            "icalBuddy",
+            "-f",  # Format output
+            "-nrd",  # No relative dates
+            "-oa",  # Only all-day events (instead of -ea)
+            "-tf", "%Y-%m-%dT%H:%M:%S",  # Time format (ISO)
+            "-df", "%Y-%m-%d",  # Date format
+            "-iep", "title,datetime,location,notes,uid",  # Include these properties
+            "-po", "title,datetime,location,notes,uid",  # Property order
+            "-b", "|||",  # Bullet point separator
+            "-ps", "| :: |",  # Property separator
+            "-sc",  # Separate by calendar (show calendar headers)
+        ]
+
+        # Add excluded calendars
+        for cal in exclude_calendars:
+            cmd_allday.extend(["-ec", cal])
+
+        # Add the date range command at the end
+        cmd_allday.append(f"eventsToday+{days_ahead}")
 
         result_allday = subprocess.run(
             cmd_allday,
@@ -276,6 +294,9 @@ def parse_datetime_range(
             # Single datetime (likely all-day event)
             dt = dateparser.parse(datetime_str)
             if dt:
+                # For all-day events, normalize to start of day
+                if all_day:
+                    dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
                 return dt.isoformat(), None
             return None, None
 

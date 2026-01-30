@@ -12,6 +12,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Multi-source support** — Sync calendars from multiple Macs to a single view
 - **14-day horizon** — Always see two weeks ahead
 - **Behind firewalls** — Client pushes data out, so corporate firewalls aren't a problem
+- **All-day events** — All-day events are synced and displayed below agenda items but above timed events
 - **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings)
 - **Smart filtering** — Exclude specific calendars or events containing certain keywords
 

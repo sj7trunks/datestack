@@ -80,7 +80,14 @@ export default function Calendar() {
       const dayEvents = events.filter(e => {
         const eventDate = new Date(e.start_time)
         return isSameDay(eventDate, date)
-      }).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+      }).sort((a, b) => {
+        // All-day events come first
+        if (a.all_day !== b.all_day) {
+          return a.all_day ? -1 : 1
+        }
+        // Within same type, sort by start time
+        return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      })
 
       const dayAgenda = agendaItems.filter(a => a.date === dateStr)
 
