@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createAgendaItem, updateAgendaItem, deleteAgendaItem, type AgendaItem } from '../api/client'
 
@@ -13,6 +13,18 @@ export default function AgendaList({ items, date }: AgendaListProps) {
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
+
+  // Sort: uncompleted first (by created_at), then completed (by created_at)
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      // Uncompleted items come first
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1
+      }
+      // Within same completion status, sort by created_at (oldest first)
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
+  }, [items])
 
   const createMutation = useMutation({
     mutationFn: (text: string) => createAgendaItem(text, date),
@@ -95,7 +107,7 @@ export default function AgendaList({ items, date }: AgendaListProps) {
 
       {/* Item list */}
       <div className="space-y-1">
-        {items.map((item) => (
+        {sortedItems.map((item) => (
           <div
             key={item.id}
             className="group flex items-center gap-2 py-1"

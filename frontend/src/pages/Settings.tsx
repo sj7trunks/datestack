@@ -259,7 +259,7 @@ export default function Settings() {
                     <p className="font-medium text-gray-900 dark:text-white">{source.name}</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {source.last_sync
-                        ? `Last sync: ${new Date(source.last_sync).toLocaleString()}`
+                        ? `Last sync: ${new Date(source.last_sync + 'Z').toLocaleString()}`
                         : 'Never synced'}
                     </p>
                   </div>

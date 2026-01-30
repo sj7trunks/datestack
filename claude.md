@@ -18,6 +18,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 ### Agenda / Task List
 - **Quick capture** — Add simple one-line tasks
 - **Inline editing** — Click on any task to edit its text (Enter to save, Escape to cancel)
+- **Smart sorting** — Uncompleted items first (by date added), then completed items
 - **Automatic rollover** — Unfinished items from past days automatically move to today on page load
 - **Completion tracking** — Check off items with visual strikethrough
 - **Undo support** — Accidentally checked something? Just uncheck it
@@ -41,6 +42,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Browser auto-detection** — The frontend uses `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect the user's timezone automatically. No hardcoded timezone.
 - **Server `TIMEZONE` env var** — Only used for headless/cron operations (`POST /api/agenda/rollover-all`, sync cleanup) where there is no client. Defaults to `America/Los_Angeles`.
 - **`getToday()` helper** — Server-side helper in `database.ts` that returns today's date string using the `TIMEZONE` env var. Only used by rollover-all and sync cleanup, never for user-facing requests.
+- **UTC timestamp conversion** — Server stores timestamps in UTC. Frontend appends 'Z' suffix when parsing to ensure correct local time display (e.g., sync times in Settings).
 
 ---
 
