@@ -12,9 +12,9 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Multi-source support** — Sync calendars from multiple Macs to a single view
 - **14-day horizon** — Always see two weeks ahead
 - **Behind firewalls** — Client pushes data out, so corporate firewalls aren't a problem
-- **All-day events** — All-day events are synced and displayed below agenda items but above timed events
-- **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings)
-- **Smart filtering** — Exclude specific calendars or events containing certain keywords
+- **All-day events** — All-day events are detected by datetime format (date-only = all-day) and displayed above timed events
+- **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings). Settings page only shows calendars that have events.
+- **Smart filtering** — Exclude specific calendars or events containing certain keywords (dual filtering: icalBuddy -ec flag + Python post-filter for reliability with multi-day events)
 
 ### Agenda / Task List
 - **Quick capture** — Add simple one-line tasks
@@ -41,6 +41,8 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 ### Timezone Handling
 - **Client-authoritative dates** — The server never computes "today" for user-facing requests. All API endpoints that need a date (`GET /api/agenda`, `POST /api/agenda`, `POST /api/agenda/rollover`) require the client to send the date explicitly. This prevents UTC vs local timezone mismatches.
 - **Browser auto-detection** — The frontend uses `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect the user's timezone automatically. No hardcoded timezone.
+- **Local time strings for API queries** — Frontend sends event queries using local time format (`yyyy-MM-dd'T'HH:mm:ss`) instead of UTC ISO strings. This ensures all-day events (stored as `T00:00:00`) are correctly matched regardless of timezone offset.
+- **Server sync cleanup** — Uses local time strings (no Z suffix) for delete range to match stored event format.
 - **Server `TIMEZONE` env var** — Only used for headless/cron operations (`POST /api/agenda/rollover-all`, sync cleanup) where there is no client. Defaults to `America/Los_Angeles`.
 - **`getToday()` helper** — Server-side helper in `database.ts` that returns today's date string using the `TIMEZONE` env var. Only used by rollover-all and sync cleanup, never for user-facing requests.
 - **UTC timestamp conversion** — Server stores timestamps in UTC. Frontend appends 'Z' suffix when parsing to ensure correct local time display (e.g., sync times in Settings).
@@ -368,6 +370,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## TODO / Future Features
+
+### Settings: Purge Empty Calendars
+- Add API endpoint to get calendars with event counts
+- Add API endpoint to delete a calendar_color entry
+- Add UI in Settings to show calendars and delete button for empty/stale ones
+
+### Database Backup/Restore
+- Add API endpoint `GET /api/admin/backup` to download database file
+- Add API endpoint `POST /api/admin/restore` to upload and restore database
+- Add UI in Settings for backup/restore buttons
+- Consider automatic backups before sync operations
+
+### Pre-PR Database Backup Hook
+- Add Claude Code hook to automatically backup database before destructive operations
+- Example hook in `.claude/settings.json` to run `cp server/data/datestack.db server/data/datestack.db.backup`
+- Manual backup command: `cp server/data/datestack.db server/data/datestack-$(date +%Y%m%d-%H%M%S).db`
 
 ---
 

@@ -73,10 +73,11 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
     }
 
     // Calculate the date range for cleanup (14 days from today)
+    // Use local time strings (no Z suffix) to match how events are stored
     const todayStr = getToday();
-    const futureDate = new Date(new Date(todayStr + 'T00:00:00').getTime() + 14 * 24 * 60 * 60 * 1000);
-    const startOfToday = new Date(todayStr + 'T00:00:00').toISOString();
-    const endOfRange = futureDate.toISOString();
+    const startOfToday = todayStr + 'T00:00:00';
+    const futureDateObj = new Date(new Date(todayStr + 'T00:00:00').getTime() + 15 * 24 * 60 * 60 * 1000);
+    const endOfRange = futureDateObj.toISOString().slice(0, 19); // Remove .000Z suffix
 
     const db = getDb();
 

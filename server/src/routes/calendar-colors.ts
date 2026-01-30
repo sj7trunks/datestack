@@ -11,11 +11,16 @@ interface CalendarColor {
   color: string;
 }
 
-// GET /api/calendar-colors - List all calendar colors for user
+// GET /api/calendar-colors - List calendar colors for calendars that have events
 router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
   try {
+    // Only return calendars that have at least one event
     const colors = query<CalendarColor>(
-      'SELECT * FROM calendar_colors WHERE user_id = ? ORDER BY calendar_name ASC',
+      `SELECT DISTINCT cc.* FROM calendar_colors cc
+       INNER JOIN events e ON e.calendar_name = cc.calendar_name
+       INNER JOIN calendar_sources cs ON e.source_id = cs.id AND cs.user_id = cc.user_id
+       WHERE cc.user_id = ?
+       ORDER BY cc.calendar_name ASC`,
       [req.user!.id]
     );
     res.json(colors);

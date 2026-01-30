@@ -40,9 +40,13 @@ export default function Calendar() {
 
   const endDate = useMemo(() => addDays(startDate, viewDays), [startDate, viewDays])
 
+  // Use local time strings (not UTC) to properly match all-day events stored as T00:00:00
+  const startDateStr = format(startDate, "yyyy-MM-dd'T'HH:mm:ss")
+  const endDateStr = format(endDate, "yyyy-MM-dd'T'HH:mm:ss")
+
   const { data: events = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ['events', startDate.toISOString(), endDate.toISOString()],
-    queryFn: () => getEvents(startDate.toISOString(), endDate.toISOString()),
+    queryKey: ['events', startDateStr, endDateStr],
+    queryFn: () => getEvents(startDateStr, endDateStr),
     refetchInterval: 60000, // Auto-refresh every minute
   })
 

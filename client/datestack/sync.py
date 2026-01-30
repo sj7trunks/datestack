@@ -57,11 +57,12 @@ def get_events_from_icalbuddy(
     exclude_calendars = exclude_calendars or []
 
     # Build icalBuddy command - options must come BEFORE the command
+    # Note: We don't use -ea/-oa flags as they don't reliably work
+    # Instead, we detect all-day events by their datetime format during parsing
     cmd = [
         "icalBuddy",
         "-f",  # Format output
         "-nrd",  # No relative dates
-        "-ea",  # Exclude all-day events separately
         "-tf", "%Y-%m-%dT%H:%M:%S",  # Time format (ISO)
         "-df", "%Y-%m-%d",  # Date format
         "-iep", "title,datetime,location,notes,uid",  # Include these properties
@@ -90,45 +91,30 @@ def get_events_from_icalbuddy(
             raise RuntimeError(f"icalBuddy failed: {result.stderr}")
 
         events = parse_icalbuddy_output(result.stdout)
-
-        # Also get all-day events with a separate command
-        # Build fresh command with -oa instead of -ea (flags must come before the command)
-        cmd_allday = [
-            "icalBuddy",
-            "-f",  # Format output
-            "-nrd",  # No relative dates
-            "-oa",  # Only all-day events (instead of -ea)
-            "-tf", "%Y-%m-%dT%H:%M:%S",  # Time format (ISO)
-            "-df", "%Y-%m-%d",  # Date format
-            "-iep", "title,datetime,location,notes,uid",  # Include these properties
-            "-po", "title,datetime,location,notes,uid",  # Property order
-            "-b", "|||",  # Bullet point separator
-            "-ps", "| :: |",  # Property separator
-            "-sc",  # Separate by calendar (show calendar headers)
-        ]
-
-        # Add excluded calendars
-        for cal in exclude_calendars:
-            cmd_allday.extend(["-ec", cal])
-
-        # Add the date range command at the end
-        cmd_allday.append(f"eventsToday+{days_ahead}")
-
-        result_allday = subprocess.run(
-            cmd_allday,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result_allday.returncode == 0:
-            allday_events = parse_icalbuddy_output(result_allday.stdout, all_day=True)
-            events.extend(allday_events)
-
         return events
 
     except subprocess.TimeoutExpired:
         raise RuntimeError("icalBuddy timed out")
+
+
+def is_all_day_datetime(datetime_str: str) -> bool:
+    """Check if a datetime string represents an all-day event.
+
+    All-day events typically have date-only format (no time component):
+    - "2026-01-29"
+    - "2026-01-29 - 2026-01-30"
+
+    Timed events have time components:
+    - "2026-01-29T09:00:00"
+    - "2026-01-29 at 2026-01-29T09:00:00 - 2026-01-29T10:00:00"
+    """
+    # If there's a 'T' followed by time, it's not all-day
+    if 'T' in datetime_str:
+        return False
+    # If there's a colon (like in "09:00"), it's not all-day
+    if ':' in datetime_str:
+        return False
+    return True
 
 
 def parse_icalbuddy_output(output: str, all_day: bool = False) -> list[dict]:
@@ -206,9 +192,13 @@ def parse_icalbuddy_output(output: str, all_day: bool = False) -> list[dict]:
             if len(props) < 2:
                 continue
 
+            # Parse datetime (second property) first to determine all_day status
+            datetime_str = props[1].strip() if len(props) > 1 and props[1] else ""
+            detected_all_day = is_all_day_datetime(datetime_str) if datetime_str else all_day
+
             event = {
                 "title": props[0].strip() if props[0] else "Untitled",
-                "all_day": all_day,
+                "all_day": detected_all_day,
                 "external_id": None,
                 "start_time": None,
                 "end_time": None,
@@ -217,11 +207,10 @@ def parse_icalbuddy_output(output: str, all_day: bool = False) -> list[dict]:
                 "calendar_name": calendar_name,
             }
 
-            # Parse datetime (second property)
-            if len(props) > 1 and props[1]:
-                datetime_str = props[1].strip()
+            # Parse datetime
+            if datetime_str:
                 event["start_time"], event["end_time"] = parse_datetime_range(
-                    datetime_str, all_day
+                    datetime_str, detected_all_day
                 )
 
             # Parse remaining parts - they have prefixes like "location:" or "notes:"
@@ -318,6 +307,27 @@ def filter_events(events: list[dict], exclude_keywords: list[str]) -> list[dict]
     return filtered
 
 
+def filter_by_calendar(events: list[dict], exclude_calendars: list[str]) -> list[dict]:
+    """Filter out events from excluded calendars.
+
+    This is a backup filter since icalBuddy's -ec flag doesn't reliably
+    exclude multi-day events that span outside the query range.
+    """
+    if not exclude_calendars:
+        return events
+
+    # Case-insensitive comparison
+    exclude_lower = [cal.lower() for cal in exclude_calendars]
+
+    filtered = []
+    for event in events:
+        calendar_name = event.get("calendar_name", "") or ""
+        if calendar_name.lower() not in exclude_lower:
+            filtered.append(event)
+
+    return filtered
+
+
 def sync_to_server(events: list[dict], config: dict) -> dict:
     """
     Sync events to the DateStack server.
@@ -365,6 +375,9 @@ def run_sync(force: bool = False) -> dict:
         days_ahead=days_ahead,
         exclude_calendars=exclude_calendars,
     )
+
+    # Filter by calendar name (backup for icalBuddy's unreliable -ec flag on multi-day events)
+    events = filter_by_calendar(events, exclude_calendars)
 
     # Filter by keywords
     events = filter_events(events, exclude_keywords)
