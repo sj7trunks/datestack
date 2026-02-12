@@ -30,6 +30,7 @@ data/
 # OS files
 .DS_Store
 Thumbs.db
+._*
 .nvmrc
 
 # Logs
