@@ -34,12 +34,13 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Timezone aware** — Auto-detects browser timezone, shows local time when traveling
 
 ### Admin Panel
-- **First user is admin** — User with `id=1` is automatically the admin (no config needed)
-- **Admin link** — "Admin" link appears in the Calendar header only for the admin user
-- **User management** — View all users with email, join date, and event count. Reset any user's password inline.
-- **Database backup** — Download the SQLite database file from the browser
-- **Database restore** — Upload a .db file to replace the current database (auto-backs up the current DB first)
-- **Admin middleware** — `requireAdmin` middleware in `server/src/middleware/auth.ts` gates all `/api/admin` routes
+- **Role-based admin** — Admin users are marked with `is_admin` column in the users table. Set via direct DB update or preserved across restores by email match.
+- **Admin link** — "Admin" link appears in the Calendar header only for admin users
+- **User management** — View all users with email, join date, event count, and admin badge. Reset any user's password inline.
+- **Database backup** — Download backup from the browser (JSON for PostgreSQL, .db file for SQLite)
+- **Database restore** — Upload a backup file to replace the current database. Accepts both JSON (PG native) and SQLite .db files (auto-converted on import). Auto-backs up current DB first (SQLite) or provides pg_dump instructions (PG). Restoring user's admin status is preserved automatically.
+- **Cross-backend restore** — SQLite backups can be restored into PostgreSQL (tables are read via sql.js and imported row-by-row with sequence resets)
+- **Admin middleware** — `requireAdmin` middleware in `server/src/middleware/auth.ts` checks `is_admin` column and gates all `/api/admin` routes
 
 ### Notifications
 - **ntfy integration** — Push notifications to your phone
@@ -256,6 +257,7 @@ volumes:
 - **Development:** SQLite via sql.js (default when `DATABASE_URL` is a file path or unset)
 - **Dual-backend abstraction:** `server/src/database.ts` detects the backend from `DATABASE_URL` and handles all SQL dialect translation (placeholder conversion, datetime functions, boolean literals, schema DDL). All route files use the same `query()`, `queryOne()`, `run()` API regardless of backend.
 - All database functions are async (`Promise`-based) to support both backends uniformly
+- **PG type normalization:** PostgreSQL type parsers are configured to return DATE and TIMESTAMP columns as plain strings (not JavaScript Date objects), keeping output consistent with SQLite and preventing frontend string-comparison mismatches
 
 ### Reverse Proxy
 Put DateStack behind a reverse proxy with SSL:
@@ -272,7 +274,9 @@ datestack.example.com {
 server {
     listen 443 ssl;
     server_name datestack.example.com;
-    
+
+    client_max_body_size 50M;  # Required for database restore uploads
+
     location / {
         proxy_pass http://localhost:8080;
         proxy_set_header Host $host;

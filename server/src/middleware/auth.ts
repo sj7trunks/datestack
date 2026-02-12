@@ -137,9 +137,9 @@ export function requireAnyAuth(req: AuthRequest, res: Response, next: NextFuncti
   }
 }
 
-// Middleware: Require admin (user id 1)
+// Middleware: Require admin
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.user || req.user.id !== 1) {
+  if (!req.user || !req.user.is_admin) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();

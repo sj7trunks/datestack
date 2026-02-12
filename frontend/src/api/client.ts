@@ -290,6 +290,7 @@ export interface AdminUser {
   email: string;
   created_at: string;
   event_count: number;
+  is_admin: boolean;
 }
 
 export async function getAdminUsers(): Promise<AdminUser[]> {
@@ -319,9 +320,12 @@ export async function downloadBackup(): Promise<void> {
   }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
+  const disposition = response.headers.get('Content-Disposition');
+  const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
+  const filename = filenameMatch?.[1] || `datestack-backup-${new Date().toISOString().slice(0, 10)}.db`;
   const a = document.createElement('a');
   a.href = url;
-  a.download = `datestack-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

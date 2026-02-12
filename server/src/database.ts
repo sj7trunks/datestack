@@ -23,8 +23,8 @@ function toPgSql(sql: string): string {
   // substr( → SUBSTRING(
   s = s.replace(/\bsubstr\s*\(/gi, 'SUBSTRING(');
   // Boolean column comparisons with literal 0/1
-  s = s.replace(/\b(enabled|completed|all_day)\s*=\s*1\b/g, '$1 = TRUE');
-  s = s.replace(/\b(enabled|completed|all_day)\s*=\s*0\b/g, '$1 = FALSE');
+  s = s.replace(/\b(enabled|completed|all_day|is_admin)\s*=\s*1\b/g, '$1 = TRUE');
+  s = s.replace(/\b(enabled|completed|all_day|is_admin)\s*=\s*0\b/g, '$1 = FALSE');
   return s;
 }
 
@@ -44,6 +44,7 @@ const SQLITE_SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -113,6 +114,7 @@ const PG_SCHEMA = `
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -181,7 +183,18 @@ const PG_SCHEMA = `
 
 export async function initDatabase(): Promise<any> {
   if (isPg) {
-    const { Pool } = await import('pg');
+    const pg = await import('pg');
+    const { Pool } = pg;
+
+    // Override pg type parsers so DATE and TIMESTAMP columns return strings
+    // instead of JavaScript Date objects (keeps output consistent with SQLite)
+    const types = pg.types;
+    // DATE (OID 1082) → return as 'YYYY-MM-DD' string
+    types.setTypeParser(1082, (val: string) => val);
+    // TIMESTAMP (OID 1114) → return as string
+    types.setTypeParser(1114, (val: string) => val);
+    // TIMESTAMPTZ (OID 1184) → return as string
+    types.setTypeParser(1184, (val: string) => val);
     pgPool = new Pool({ connectionString: DATABASE_URL });
 
     // Create schema
@@ -200,6 +213,18 @@ export async function initDatabase(): Promise<any> {
       );
       if (result.rows.length === 0) {
         await pgPool.query('ALTER TABLE events ADD COLUMN calendar_name TEXT');
+      }
+    } catch (e) {
+      // Column likely already exists
+    }
+
+    // Migration: ensure is_admin column exists on users
+    try {
+      const result = await pgPool.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'is_admin'"
+      );
+      if (result.rows.length === 0) {
+        await pgPool.query('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE');
       }
     } catch (e) {
       // Column likely already exists
@@ -243,6 +268,18 @@ export async function initDatabase(): Promise<any> {
     }
   } catch (e) {
     // Column likely already exists or table doesn't exist yet
+  }
+
+  // Migration: Add is_admin column if it doesn't exist
+  try {
+    const tableInfo = sqliteDb.exec("PRAGMA table_info(users)");
+    const columns = tableInfo[0]?.values || [];
+    const hasIsAdmin = columns.some((col: any) => col[1] === 'is_admin');
+    if (!hasIsAdmin) {
+      sqliteDb.run('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE');
+    }
+  } catch (e) {
+    // Column likely already exists
   }
 
   saveDatabase();
@@ -358,6 +395,7 @@ export interface User {
   id: number;
   email: string;
   password_hash: string;
+  is_admin: boolean;
   created_at: string;
 }
 

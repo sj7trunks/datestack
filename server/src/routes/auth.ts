@@ -97,7 +97,7 @@ router.get('/me', requireAuth, (req: AuthRequest, res: Response) => {
     id: user.id,
     email: user.email,
     created_at: user.created_at,
-    is_admin: user.id === 1,
+    is_admin: !!user.is_admin,
   });
 });
 

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import initSqlJs from 'sql.js';
 import { query, run, saveDatabase, reloadDatabase, getDatabasePath, isPostgres } from '../database';
 import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth';
 
@@ -12,6 +13,17 @@ const upload = multer({ dest: '/tmp/datestack-uploads/' });
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
 
+// Table names in dependency order (parents before children)
+const TABLE_ORDER = [
+  'users',
+  'api_keys',
+  'calendar_sources',
+  'events',
+  'agenda_items',
+  'calendar_colors',
+  'availability_settings',
+];
+
 // GET /api/admin/users - List all users with event counts
 router.get('/users', async (req: AuthRequest, res: Response) => {
   try {
@@ -20,8 +32,9 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       email: string;
       created_at: string;
       event_count: number;
+      is_admin: boolean;
     }>(
-      `SELECT u.id, u.email, u.created_at,
+      `SELECT u.id, u.email, u.created_at, u.is_admin,
         (SELECT COUNT(*) FROM events e
          INNER JOIN calendar_sources cs ON e.source_id = cs.id
          WHERE cs.user_id = u.id) as event_count
@@ -59,51 +72,145 @@ router.post('/users/:id/reset-password', async (req: AuthRequest, res: Response)
   }
 });
 
-// GET /api/admin/backup - Download database backup (SQLite only)
+// GET /api/admin/backup - Download database backup
 router.get('/backup', async (req: AuthRequest, res: Response) => {
-  if (isPostgres()) {
-    return res.status(400).json({ error: 'Backup is only available for SQLite databases' });
-  }
-
   try {
-    saveDatabase();
-    const dbPath = getDatabasePath();
-    const filename = `datestack-backup-${new Date().toISOString().slice(0, 10)}.db`;
-    res.download(dbPath, filename);
+    if (isPostgres()) {
+      // PG: dump all tables as JSON
+      const dump: Record<string, any[]> = {};
+      for (const table of TABLE_ORDER) {
+        dump[table] = await query(`SELECT * FROM ${table}`);
+      }
+      const filename = `datestack-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.json({ format: 'datestack-pg-backup', version: 1, tables: dump });
+    } else {
+      // SQLite: download .db file
+      saveDatabase();
+      const dbPath = getDatabasePath();
+      const filename = `datestack-backup-${new Date().toISOString().slice(0, 10)}.db`;
+      res.download(dbPath, filename);
+    }
   } catch (error) {
     console.error('Admin backup error:', error);
     res.status(500).json({ error: 'Failed to create backup' });
   }
 });
 
-// POST /api/admin/restore - Restore database from upload (SQLite only)
+// POST /api/admin/restore - Restore database from upload
 router.post('/restore', upload.single('database'), async (req: AuthRequest, res: Response) => {
-  if (isPostgres()) {
-    return res.status(400).json({ error: 'Restore is only available for SQLite databases' });
-  }
-
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
+  const adminEmail = req.user!.email;
+
   try {
-    const dbPath = getDatabasePath();
+    if (isPostgres()) {
+      // PG: restore from JSON backup or SQLite .db file
+      const fileBuffer = fs.readFileSync(req.file.path);
+      fs.unlinkSync(req.file.path);
 
-    // Backup current database first
-    saveDatabase();
-    const backupPath = dbPath + '.bak-' + Date.now();
-    fs.copyFileSync(dbPath, backupPath);
+      // Determine format: try JSON first, then SQLite
+      let tables: Record<string, any[]> = {};
 
-    // Write uploaded file as new database
-    fs.copyFileSync(req.file.path, dbPath);
+      const content = fileBuffer.toString('utf-8');
+      let isJson = false;
+      try {
+        const data = JSON.parse(content);
+        if (data.tables && data.format === 'datestack-pg-backup') {
+          tables = data.tables;
+          isJson = true;
+        }
+      } catch {
+        // Not JSON - try as SQLite
+      }
 
-    // Clean up uploaded temp file
-    fs.unlinkSync(req.file.path);
+      if (!isJson) {
+        // Try to open as SQLite database
+        try {
+          const SQL = await initSqlJs();
+          const sqliteDb = new SQL.Database(fileBuffer);
 
-    // Reload the database
-    await reloadDatabase();
+          for (const table of TABLE_ORDER) {
+            try {
+              const stmt = sqliteDb.prepare(`SELECT * FROM ${table}`);
+              const rows: any[] = [];
+              while (stmt.step()) {
+                rows.push(stmt.getAsObject());
+              }
+              stmt.free();
+              tables[table] = rows;
+            } catch {
+              // Table might not exist in this backup
+              tables[table] = [];
+            }
+          }
 
-    res.json({ message: 'Database restored successfully', backup: path.basename(backupPath) });
+          sqliteDb.close();
+        } catch (e) {
+          return res.status(400).json({ error: 'Invalid backup file. Expected JSON or SQLite (.db) format.' });
+        }
+      }
+
+      // Truncate all tables in reverse dependency order
+      const reverseTables = [...TABLE_ORDER].reverse();
+      for (const table of reverseTables) {
+        await run(`DELETE FROM ${table}`, []);
+      }
+
+      // Insert rows in dependency order
+      for (const table of TABLE_ORDER) {
+        const rows = tables[table];
+        if (!rows || rows.length === 0) continue;
+
+        for (const row of rows) {
+          const cols = Object.keys(row);
+          const vals = Object.values(row);
+          await run(
+            `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+            vals
+          );
+        }
+      }
+
+      // Reset sequences for all tables
+      for (const table of TABLE_ORDER) {
+        try {
+          await run(`SELECT setval('${table}_id_seq', COALESCE((SELECT MAX(id) FROM ${table}), 0) + 1, false)`, []);
+        } catch {
+          // Table might not have a sequence
+        }
+      }
+
+      // Ensure restoring user retains admin
+      await run('UPDATE users SET is_admin = ? WHERE email = ?', [true, adminEmail]);
+
+      res.json({ message: 'Database restored successfully', backup: 'pre-restore state available via pg_dump' });
+    } else {
+      // SQLite: restore from .db file
+      const dbPath = getDatabasePath();
+
+      // Backup current database first
+      saveDatabase();
+      const backupPath = dbPath + '.bak-' + Date.now();
+      fs.copyFileSync(dbPath, backupPath);
+
+      // Write uploaded file as new database
+      fs.copyFileSync(req.file.path, dbPath);
+
+      // Clean up uploaded temp file
+      fs.unlinkSync(req.file.path);
+
+      // Reload the database (runs migrations including is_admin column)
+      await reloadDatabase();
+
+      // Ensure the restoring user retains admin in the restored DB
+      await run('UPDATE users SET is_admin = 1 WHERE email = ?', [adminEmail]);
+
+      res.json({ message: 'Database restored successfully', backup: path.basename(backupPath) });
+    }
   } catch (error) {
     console.error('Admin restore error:', error);
     res.status(500).json({ error: 'Failed to restore database' });

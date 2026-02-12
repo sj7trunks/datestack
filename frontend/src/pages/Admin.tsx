@@ -89,7 +89,7 @@ export default function Admin() {
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
                         {user.email}
-                        {user.id === 1 && (
+                        {user.is_admin && (
                           <span className="ml-2 text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">
                             admin
                           </span>
@@ -149,7 +149,7 @@ export default function Admin() {
             <div className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
               <p className="font-medium text-gray-900 dark:text-white mb-2">Backup</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Download a copy of the SQLite database file.
+                Download a backup of the database.
               </p>
               <button
                 onClick={() => backupMutation.mutate()}
@@ -169,13 +169,13 @@ export default function Admin() {
             <div className="p-3 bg-white dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
               <p className="font-medium text-gray-900 dark:text-white mb-2">Restore</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Upload a .db file to replace the current database. The current database will be backed up automatically.
+                Upload a backup file to replace the current database.
               </p>
               <div className="flex gap-2">
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".db"
+                  accept=".db,.json"
                   className="flex-1 text-sm text-gray-700 dark:text-gray-300 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-300 hover:file:bg-gray-200 dark:hover:file:bg-gray-600"
                 />
                 <button
