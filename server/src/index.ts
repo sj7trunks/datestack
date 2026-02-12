@@ -15,7 +15,7 @@ import calendarColorsRoutes from './routes/calendar-colors';
 import healthRoutes from './routes/health';
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
@@ -57,8 +57,8 @@ async function start() {
     await initDatabase();
     console.log('Database initialized');
 
-    app.listen(PORT, () => {
-      console.log(`DateStack server running on port ${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`DateStack server running on http://0.0.0.0:${PORT}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

@@ -61,7 +61,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 ## Installation Requirements
 
 ### Server
-- Node.js 18+
+- Node.js 20+
 - SQLite (bundled via sql.js)
 - Docker (recommended for production)
 
