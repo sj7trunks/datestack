@@ -5,8 +5,8 @@ import { AuthRequest, requireAnyAuth } from '../middleware/auth';
 const router = Router();
 
 // GET /api/sources - List calendar sources
-router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
-  const sources = query<CalendarSource>(
+router.get('/', requireAnyAuth, async (req: AuthRequest, res: Response) => {
+  const sources = await query<CalendarSource>(
     'SELECT * FROM calendar_sources WHERE user_id = ? ORDER BY name',
     [req.user!.id]
   );
@@ -15,7 +15,7 @@ router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/sources - Create calendar source
-router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.post('/', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const { name, color } = req.body;
 
   if (!name) {
@@ -23,12 +23,12 @@ router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const result = run(
+    const result = await run(
       'INSERT INTO calendar_sources (user_id, name, color) VALUES (?, ?, ?)',
       [req.user!.id, name, color || '#3B82F6']
     );
 
-    const source = queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid]);
+    const source = await queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid]);
 
     res.status(201).json(source);
   } catch (error) {
@@ -38,14 +38,14 @@ router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/sources/:id - Get single source
-router.get('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.get('/:id', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const sourceId = parseInt(req.params.id, 10);
 
   if (isNaN(sourceId)) {
     return res.status(400).json({ error: 'Invalid source ID' });
   }
 
-  const source = queryOne<CalendarSource>(
+  const source = await queryOne<CalendarSource>(
     'SELECT * FROM calendar_sources WHERE id = ? AND user_id = ?',
     [sourceId, req.user!.id]
   );
@@ -58,7 +58,7 @@ router.get('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PATCH /api/sources/:id - Update calendar source
-router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.patch('/:id', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const sourceId = parseInt(req.params.id, 10);
   const { name, color } = req.body;
 
@@ -67,7 +67,7 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   // Verify ownership
-  const existing = queryOne<CalendarSource>(
+  const existing = await queryOne<CalendarSource>(
     'SELECT * FROM calendar_sources WHERE id = ? AND user_id = ?',
     [sourceId, req.user!.id]
   );
@@ -94,9 +94,9 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
     }
 
     values.push(sourceId);
-    run(`UPDATE calendar_sources SET ${updates.join(', ')} WHERE id = ?`, values);
+    await run(`UPDATE calendar_sources SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    const source = queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [sourceId]);
+    const source = await queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [sourceId]);
     res.json(source);
   } catch (error) {
     console.error('Update source error:', error);
@@ -105,7 +105,7 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/sources/:id - Delete calendar source
-router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.delete('/:id', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const sourceId = parseInt(req.params.id, 10);
 
   if (isNaN(sourceId)) {
@@ -113,7 +113,7 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   // Verify ownership
-  const existing = queryOne<CalendarSource>(
+  const existing = await queryOne<CalendarSource>(
     'SELECT * FROM calendar_sources WHERE id = ? AND user_id = ?',
     [sourceId, req.user!.id]
   );
@@ -124,8 +124,8 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 
   try {
     // Delete events first (no cascade in sql.js)
-    run('DELETE FROM events WHERE source_id = ?', [sourceId]);
-    run('DELETE FROM calendar_sources WHERE id = ?', [sourceId]);
+    await run('DELETE FROM events WHERE source_id = ?', [sourceId]);
+    await run('DELETE FROM calendar_sources WHERE id = ?', [sourceId]);
     res.json({ message: 'Calendar source deleted' });
   } catch (error) {
     console.error('Delete source error:', error);

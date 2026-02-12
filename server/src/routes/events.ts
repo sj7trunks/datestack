@@ -10,7 +10,7 @@ interface EventWithSource extends Event {
 }
 
 // GET /api/events - List events
-router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   const { start, end, source } = req.query;
 
   let sql = `
@@ -41,7 +41,7 @@ router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
   sql += ' ORDER BY e.start_time ASC';
 
   try {
-    const events = query<EventWithSource>(sql, params);
+    const events = await query<EventWithSource>(sql, params);
     res.json(events);
   } catch (error) {
     console.error('Get events error:', error);
@@ -50,7 +50,7 @@ router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/events/sync - Bulk sync events from client
-router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
+router.post('/sync', requireApiKey, async (req: AuthRequest, res: Response) => {
   const { source_name, events } = req.body;
 
   if (!source_name || !events || !Array.isArray(events)) {
@@ -59,17 +59,17 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
 
   try {
     // Get or create the calendar source
-    let source = queryOne<CalendarSource>(
+    let source = await queryOne<CalendarSource>(
       'SELECT * FROM calendar_sources WHERE user_id = ? AND name = ?',
       [req.user!.id, source_name]
     );
 
     if (!source) {
-      const result = run(
+      const result = await run(
         'INSERT INTO calendar_sources (user_id, name) VALUES (?, ?)',
         [req.user!.id, source_name]
       );
-      source = queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid])!;
+      source = (await queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid]))!;
     }
 
     // Calculate the date range for cleanup (14 days from today)
@@ -79,10 +79,8 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
     const futureDateObj = new Date(new Date(todayStr + 'T00:00:00').getTime() + 15 * 24 * 60 * 60 * 1000);
     const endOfRange = futureDateObj.toISOString().slice(0, 19); // Remove .000Z suffix
 
-    const db = getDb();
-
     // Delete existing events in the sync range for this source
-    run(
+    await run(
       'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time <= ?',
       [source.id, startOfToday, endOfRange]
     );
@@ -94,7 +92,7 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
         continue; // Skip invalid events
       }
 
-      run(
+      await run(
         `INSERT INTO events (source_id, external_id, title, start_time, end_time, location, notes, all_day, calendar_name)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -116,16 +114,16 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
     const palette = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#6366F1'];
     const distinctCalendars = [...new Set(events.map((e: any) => e.calendar_name).filter(Boolean))];
     for (const calName of distinctCalendars) {
-      const existing = queryOne('SELECT id FROM calendar_colors WHERE user_id = ? AND calendar_name = ?', [req.user!.id, calName]);
+      const existing = await queryOne('SELECT id FROM calendar_colors WHERE user_id = ? AND calendar_name = ?', [req.user!.id, calName]);
       if (!existing) {
-        const countResult = query<{ cnt: number }>('SELECT COUNT(*) as cnt FROM calendar_colors WHERE user_id = ?', [req.user!.id]);
+        const countResult = await query<{ cnt: number }>('SELECT COUNT(*) as cnt FROM calendar_colors WHERE user_id = ?', [req.user!.id]);
         const idx = (countResult[0]?.cnt || 0) % palette.length;
-        run('INSERT INTO calendar_colors (user_id, calendar_name, color) VALUES (?, ?, ?)', [req.user!.id, calName, palette[idx]]);
+        await run('INSERT INTO calendar_colors (user_id, calendar_name, color) VALUES (?, ?, ?)', [req.user!.id, calName, palette[idx]]);
       }
     }
 
     // Update last_sync timestamp
-    run('UPDATE calendar_sources SET last_sync = datetime("now") WHERE id = ?', [source.id]);
+    await run('UPDATE calendar_sources SET last_sync = datetime("now") WHERE id = ?', [source.id]);
 
     res.json({
       message: 'Sync complete',
@@ -139,14 +137,14 @@ router.post('/sync', requireApiKey, (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/events/:id - Get single event
-router.get('/:id', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   const eventId = parseInt(req.params.id, 10);
 
   if (isNaN(eventId)) {
     return res.status(400).json({ error: 'Invalid event ID' });
   }
 
-  const event = queryOne<EventWithSource>(`
+  const event = await queryOne<EventWithSource>(`
     SELECT e.*, cs.name as source_name, cs.color as source_color
     FROM events e
     JOIN calendar_sources cs ON e.source_id = cs.id

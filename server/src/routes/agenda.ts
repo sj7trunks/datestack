@@ -5,7 +5,7 @@ import { AuthRequest, requireAnyAuth, requireSystemKey } from '../middleware/aut
 const router = Router();
 
 // GET /api/agenda - List agenda items
-router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.get('/', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const { date, include_completed } = req.query;
 
   if (!date) {
@@ -24,7 +24,7 @@ router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
   sql += ' ORDER BY created_at ASC';
 
   try {
-    const items = query<AgendaItem>(sql, params);
+    const items = await query<AgendaItem>(sql, params);
     res.json(items);
   } catch (error) {
     console.error('Get agenda items error:', error);
@@ -33,7 +33,7 @@ router.get('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/agenda/range - List agenda items for a date range
-router.get('/range', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.get('/range', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const { start, end, include_completed } = req.query;
 
   if (!start || !end) {
@@ -50,7 +50,7 @@ router.get('/range', requireAnyAuth, (req: AuthRequest, res: Response) => {
   sql += ' ORDER BY date ASC, created_at ASC';
 
   try {
-    const items = query<AgendaItem>(sql, params);
+    const items = await query<AgendaItem>(sql, params);
     res.json(items);
   } catch (error) {
     console.error('Get agenda items range error:', error);
@@ -59,7 +59,7 @@ router.get('/range', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/agenda - Create agenda item
-router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.post('/', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const { text, date } = req.body;
 
   if (!text) {
@@ -73,12 +73,12 @@ router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
   const targetDate = date;
 
   try {
-    const result = run(
+    const result = await run(
       'INSERT INTO agenda_items (user_id, text, date) VALUES (?, ?, ?)',
       [req.user!.id, text, targetDate]
     );
 
-    const item = queryOne<AgendaItem>('SELECT * FROM agenda_items WHERE id = ?', [result.lastInsertRowid]);
+    const item = await queryOne<AgendaItem>('SELECT * FROM agenda_items WHERE id = ?', [result.lastInsertRowid]);
 
     res.status(201).json(item);
   } catch (error) {
@@ -88,7 +88,7 @@ router.post('/', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PATCH /api/agenda/:id - Update agenda item (complete/uncomplete)
-router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.patch('/:id', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const itemId = parseInt(req.params.id, 10);
   const { text, date, completed } = req.body;
 
@@ -97,7 +97,7 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   // Verify ownership
-  const existing = queryOne<AgendaItem>(
+  const existing = await queryOne<AgendaItem>(
     'SELECT * FROM agenda_items WHERE id = ? AND user_id = ?',
     [itemId, req.user!.id]
   );
@@ -136,9 +136,9 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
     }
 
     values.push(itemId);
-    run(`UPDATE agenda_items SET ${updates.join(', ')} WHERE id = ?`, values);
+    await run(`UPDATE agenda_items SET ${updates.join(', ')} WHERE id = ?`, values);
 
-    const item = queryOne<AgendaItem>('SELECT * FROM agenda_items WHERE id = ?', [itemId]);
+    const item = await queryOne<AgendaItem>('SELECT * FROM agenda_items WHERE id = ?', [itemId]);
     res.json(item);
   } catch (error) {
     console.error('Update agenda item error:', error);
@@ -147,7 +147,7 @@ router.patch('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/agenda/:id - Delete agenda item
-router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.delete('/:id', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const itemId = parseInt(req.params.id, 10);
 
   if (isNaN(itemId)) {
@@ -155,7 +155,7 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   // Verify ownership
-  const existing = queryOne<AgendaItem>(
+  const existing = await queryOne<AgendaItem>(
     'SELECT * FROM agenda_items WHERE id = ? AND user_id = ?',
     [itemId, req.user!.id]
   );
@@ -165,7 +165,7 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    run('DELETE FROM agenda_items WHERE id = ?', [itemId]);
+    await run('DELETE FROM agenda_items WHERE id = ?', [itemId]);
     res.json({ message: 'Agenda item deleted' });
   } catch (error) {
     console.error('Delete agenda item error:', error);
@@ -174,7 +174,7 @@ router.delete('/:id', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/agenda/rollover - Move incomplete items to today
-router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
+router.post('/rollover', requireAnyAuth, async (req: AuthRequest, res: Response) => {
   const { date } = req.body;
 
   if (!date) {
@@ -184,7 +184,7 @@ router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
   const today = date;
 
   try {
-    const result = run(
+    const result = await run(
       'UPDATE agenda_items SET date = ? WHERE user_id = ? AND completed = 0 AND date < ?',
       [today, req.user!.id, today]
     );
@@ -200,11 +200,11 @@ router.post('/rollover', requireAnyAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/agenda/rollover-all - System-level rollover for all users
-router.post('/rollover-all', requireSystemKey, (req: Request, res: Response) => {
+router.post('/rollover-all', requireSystemKey, async (req: Request, res: Response) => {
   const today = getToday();
 
   try {
-    const result = run(
+    const result = await run(
       'UPDATE agenda_items SET date = ? WHERE completed = 0 AND date < ?',
       [today, today]
     );

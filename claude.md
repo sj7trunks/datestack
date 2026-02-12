@@ -62,7 +62,8 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 
 ### Server
 - Node.js 20+
-- SQLite (bundled via sql.js)
+- PostgreSQL 16+ (production, via Docker)
+- SQLite (bundled via sql.js, for local development)
 - Docker (recommended for production)
 
 ### Client (Mac)
@@ -205,24 +206,37 @@ The included Dockerfile:
 ### Docker Compose Configuration
 
 ```yaml
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=datestack
+      - POSTGRES_PASSWORD=datestack
+      - POSTGRES_DB=datestack
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datestack"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   datestack:
     build: .
-    ports:
-      - "8080:8080"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=/app/data/datestack.db
+      - DATABASE_URL=postgresql://datestack:datestack@postgres:5432/datestack
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-random-string}
       - TIMEZONE=America/Los_Angeles
-    volumes:
-      - datestack_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  datestack_data:
+  pgdata:
 ```
 
 ---
@@ -230,9 +244,10 @@ volumes:
 ## Production Considerations
 
 ### Database
-- SQLite (via sql.js) works well for personal use and small teams
-- Data is persisted to disk automatically
-- For backup, simply copy the database file
+- **Production:** PostgreSQL 16 via Docker (set `DATABASE_URL=postgresql://...`)
+- **Development:** SQLite via sql.js (default when `DATABASE_URL` is a file path or unset)
+- **Dual-backend abstraction:** `server/src/database.ts` detects the backend from `DATABASE_URL` and handles all SQL dialect translation (placeholder conversion, datetime functions, boolean literals, schema DDL). All route files use the same `query()`, `queryOne()`, `run()` API regardless of backend.
+- All database functions are async (`Promise`-based) to support both backends uniformly
 
 ### Reverse Proxy
 Put DateStack behind a reverse proxy with SSL:
@@ -265,10 +280,10 @@ server {
 
 ### Backups
 ```bash
-# Docker volume backup
-docker cp datestack_datestack_1:/app/data/datestack.db ./backup/datestack-$(date +%Y%m%d).db
+# PostgreSQL backup (production)
+docker compose exec postgres pg_dump -U datestack datestack > ./backup/datestack-$(date +%Y%m%d).sql
 
-# Or if running without Docker
+# SQLite backup (development)
 cp /path/to/data/datestack.db ./backup/datestack-$(date +%Y%m%d).db
 ```
 

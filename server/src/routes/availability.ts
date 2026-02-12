@@ -6,9 +6,9 @@ import { AuthRequest, requireAuth } from '../middleware/auth';
 const router = Router();
 
 // GET /api/availability - Get current user's availability settings
-router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    let settings = queryOne<AvailabilitySettings>(
+    let settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
       [req.user!.id]
     );
@@ -36,11 +36,11 @@ router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PATCH /api/availability - Update availability settings
-router.patch('/', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/', requireAuth, async (req: AuthRequest, res: Response) => {
   const { enabled, start_hour, end_hour, days_ahead } = req.body;
 
   try {
-    let settings = queryOne<AvailabilitySettings>(
+    let settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
       [req.user!.id]
     );
@@ -48,7 +48,7 @@ router.patch('/', requireAuth, (req: AuthRequest, res: Response) => {
     if (!settings) {
       // Create new settings with a share token
       const shareToken = crypto.randomBytes(16).toString('hex');
-      run(
+      await run(
         `INSERT INTO availability_settings (user_id, enabled, start_hour, end_hour, share_token, days_ahead)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
@@ -85,7 +85,7 @@ router.patch('/', requireAuth, (req: AuthRequest, res: Response) => {
       if (updates.length > 0) {
         updates.push('updated_at = datetime("now")');
         params.push(req.user!.id);
-        run(
+        await run(
           `UPDATE availability_settings SET ${updates.join(', ')} WHERE user_id = ?`,
           params
         );
@@ -93,7 +93,7 @@ router.patch('/', requireAuth, (req: AuthRequest, res: Response) => {
     }
 
     // Get updated settings
-    settings = queryOne<AvailabilitySettings>(
+    settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
       [req.user!.id]
     );
@@ -106,28 +106,28 @@ router.patch('/', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/availability/regenerate-token - Generate a new share token
-router.post('/regenerate-token', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/regenerate-token', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const shareToken = crypto.randomBytes(16).toString('hex');
 
-    let settings = queryOne<AvailabilitySettings>(
+    let settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
       [req.user!.id]
     );
 
     if (!settings) {
-      run(
+      await run(
         `INSERT INTO availability_settings (user_id, share_token) VALUES (?, ?)`,
         [req.user!.id, shareToken]
       );
     } else {
-      run(
+      await run(
         'UPDATE availability_settings SET share_token = ?, updated_at = datetime("now") WHERE user_id = ?',
         [shareToken, req.user!.id]
       );
     }
 
-    settings = queryOne<AvailabilitySettings>(
+    settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
       [req.user!.id]
     );
@@ -152,12 +152,12 @@ interface DayAvailability {
 }
 
 // GET /api/availability/public/:token - Public availability view (no auth required)
-router.get('/public/:token', (req: Request, res: Response) => {
+router.get('/public/:token', async (req: Request, res: Response) => {
   const { token } = req.params;
 
   try {
     // Find settings by share token
-    const settings = queryOne<AvailabilitySettings>(
+    const settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE share_token = ? AND enabled = 1',
       [token]
     );
@@ -172,7 +172,7 @@ router.get('/public/:token', (req: Request, res: Response) => {
     const endDate = new Date(startOfToday.getTime() + settings.days_ahead * 24 * 60 * 60 * 1000);
 
     // Get all calendar sources for this user
-    const sources = query<CalendarSource>(
+    const sources = await query<CalendarSource>(
       'SELECT id FROM calendar_sources WHERE user_id = ?',
       [settings.user_id]
     );
@@ -189,7 +189,7 @@ router.get('/public/:token', (req: Request, res: Response) => {
     }
 
     // Get events within the date range
-    const events = query<Event>(
+    const events = await query<Event>(
       `SELECT * FROM events
        WHERE source_id IN (${sourceIds.map(() => '?').join(',')})
        AND start_time >= ? AND start_time <= ?

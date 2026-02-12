@@ -12,10 +12,10 @@ interface CalendarColor {
 }
 
 // GET /api/calendar-colors - List calendar colors for calendars that have events
-router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     // Only return calendars that have at least one event
-    const colors = query<CalendarColor>(
+    const colors = await query<CalendarColor>(
       `SELECT DISTINCT cc.* FROM calendar_colors cc
        INNER JOIN events e ON e.calendar_name = cc.calendar_name
        INNER JOIN calendar_sources cs ON e.source_id = cs.id AND cs.user_id = cc.user_id
@@ -31,7 +31,7 @@ router.get('/', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PATCH /api/calendar-colors/:name - Set color for a calendar_name
-router.patch('/:name', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/:name', requireAuth, async (req: AuthRequest, res: Response) => {
   const calendarName = decodeURIComponent(req.params.name);
   const { color } = req.body;
 
@@ -41,21 +41,21 @@ router.patch('/:name', requireAuth, (req: AuthRequest, res: Response) => {
 
   try {
     // Upsert
-    const existing = queryOne<CalendarColor>(
+    const existing = await queryOne<CalendarColor>(
       'SELECT * FROM calendar_colors WHERE user_id = ? AND calendar_name = ?',
       [req.user!.id, calendarName]
     );
 
     if (existing) {
-      run('UPDATE calendar_colors SET color = ? WHERE id = ?', [color, existing.id]);
+      await run('UPDATE calendar_colors SET color = ? WHERE id = ?', [color, existing.id]);
     } else {
-      run(
+      await run(
         'INSERT INTO calendar_colors (user_id, calendar_name, color) VALUES (?, ?, ?)',
         [req.user!.id, calendarName, color]
       );
     }
 
-    const updated = queryOne<CalendarColor>(
+    const updated = await queryOne<CalendarColor>(
       'SELECT * FROM calendar_colors WHERE user_id = ? AND calendar_name = ?',
       [req.user!.id, calendarName]
     );

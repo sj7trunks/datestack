@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { query, queryOne, User, ApiKey } from '../database';
+import { queryOne, User, ApiKey } from '../database';
 
 const SECRET_KEY = process.env.SECRET_KEY || 'development-secret-key';
 
@@ -46,13 +46,15 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
-  const user = queryOne<User>('SELECT * FROM users WHERE id = ?', [decoded.userId]);
-  if (!user) {
-    return res.status(401).json({ error: 'User not found' });
-  }
-
-  req.user = user;
-  next();
+  queryOne<User>('SELECT * FROM users WHERE id = ?', [decoded.userId]).then(user => {
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    req.user = user;
+    next();
+  }).catch(() => {
+    res.status(500).json({ error: 'Authentication failed' });
+  });
 }
 
 // Middleware: Require API key authentication (for client sync)
@@ -63,18 +65,23 @@ export function requireApiKey(req: AuthRequest, res: Response, next: NextFunctio
     return res.status(401).json({ error: 'API key required' });
   }
 
-  const keyRecord = queryOne<ApiKey>('SELECT * FROM api_keys WHERE key = ?', [apiKey]);
-  if (!keyRecord) {
-    return res.status(401).json({ error: 'Invalid API key' });
-  }
+  queryOne<ApiKey>('SELECT * FROM api_keys WHERE key = ?', [apiKey]).then(keyRecord => {
+    if (!keyRecord) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
 
-  const user = queryOne<User>('SELECT * FROM users WHERE id = ?', [keyRecord.user_id]);
-  if (!user) {
-    return res.status(401).json({ error: 'User not found' });
-  }
-
-  req.user = user;
-  next();
+    queryOne<User>('SELECT * FROM users WHERE id = ?', [keyRecord.user_id]).then(user => {
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      req.user = user;
+      next();
+    }).catch(() => {
+      res.status(500).json({ error: 'Authentication failed' });
+    });
+  }).catch(() => {
+    res.status(500).json({ error: 'Authentication failed' });
+  });
 }
 
 // Middleware: Accept either JWT or API key
@@ -82,37 +89,52 @@ export function requireAnyAuth(req: AuthRequest, res: Response, next: NextFuncti
   // Try API key first
   const apiKey = req.headers['x-api-key'] as string;
   if (apiKey) {
-    const keyRecord = queryOne<ApiKey>('SELECT * FROM api_keys WHERE key = ?', [apiKey]);
-    if (keyRecord) {
-      const user = queryOne<User>('SELECT * FROM users WHERE id = ?', [keyRecord.user_id]);
-      if (user) {
-        req.user = user;
-        return next();
+    queryOne<ApiKey>('SELECT * FROM api_keys WHERE key = ?', [apiKey]).then(keyRecord => {
+      if (keyRecord) {
+        queryOne<User>('SELECT * FROM users WHERE id = ?', [keyRecord.user_id]).then(user => {
+          if (user) {
+            req.user = user;
+            return next();
+          }
+          tryJwt();
+        }).catch(() => tryJwt());
+      } else {
+        tryJwt();
+      }
+    }).catch(() => tryJwt());
+    return;
+  }
+
+  tryJwt();
+
+  function tryJwt() {
+    // Fall back to JWT
+    let token = req.cookies?.token;
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.slice(7);
       }
     }
-  }
 
-  // Fall back to JWT
-  let token = req.cookies?.token;
-  if (!token) {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7);
-    }
-  }
-
-  if (token) {
-    const decoded = verifyToken(token);
-    if (decoded) {
-      const user = queryOne<User>('SELECT * FROM users WHERE id = ?', [decoded.userId]);
-      if (user) {
-        req.user = user;
-        return next();
+    if (token) {
+      const decoded = verifyToken(token);
+      if (decoded) {
+        queryOne<User>('SELECT * FROM users WHERE id = ?', [decoded.userId]).then(user => {
+          if (user) {
+            req.user = user;
+            return next();
+          }
+          res.status(401).json({ error: 'Authentication required' });
+        }).catch(() => {
+          res.status(500).json({ error: 'Authentication failed' });
+        });
+        return;
       }
     }
-  }
 
-  return res.status(401).json({ error: 'Authentication required' });
+    res.status(401).json({ error: 'Authentication required' });
+  }
 }
 
 // Middleware: Require system API key (for system-level operations)

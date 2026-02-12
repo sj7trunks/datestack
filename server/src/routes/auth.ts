@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { query, queryOne, run, User } from '../database';
+import { queryOne, run, User } from '../database';
 import { AuthRequest, requireAuth, generateToken } from '../middleware/auth';
 
 const router = Router();
@@ -18,14 +18,14 @@ router.post('/register', async (req, res) => {
   }
 
   // Check if user already exists
-  const existing = queryOne<{ id: number }>('SELECT id FROM users WHERE email = ?', [email]);
+  const existing = await queryOne<{ id: number }>('SELECT id FROM users WHERE email = ?', [email]);
   if (existing) {
     return res.status(400).json({ error: 'Email already registered' });
   }
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = run('INSERT INTO users (email, password_hash) VALUES (?, ?)', [email, passwordHash]);
+    const result = await run('INSERT INTO users (email, password_hash) VALUES (?, ?)', [email, passwordHash]);
 
     const token = generateToken(result.lastInsertRowid);
 
@@ -54,7 +54,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  const user = queryOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+  const user = await queryOne<User>('SELECT * FROM users WHERE email = ?', [email]);
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
