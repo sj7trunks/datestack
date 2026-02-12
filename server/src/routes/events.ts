@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, queryOne, run, Event, CalendarSource, getDb, saveDatabase, getToday } from '../database';
+import { query, queryOne, run, Event, CalendarSource } from '../database';
 import { AuthRequest, requireAuth, requireApiKey } from '../middleware/auth';
 
 const router = Router();
@@ -72,20 +72,23 @@ router.post('/sync', requireApiKey, async (req: AuthRequest, res: Response) => {
       source = (await queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid]))!;
     }
 
-    // Calculate the date range for cleanup (today to today + 15 days)
-    // Use date-only strings for reliable comparison on both SQLite and PostgreSQL:
-    // - SQLite compares as strings: '2026-02-12T09:00:00' >= '2026-02-12' works correctly
-    // - PostgreSQL casts to TIMESTAMP: '2026-02-12' becomes '2026-02-12 00:00:00'
-    const todayStr = getToday();
-    const endDate = new Date(todayStr + 'T00:00:00Z');
-    endDate.setUTCDate(endDate.getUTCDate() + 15);
-    const endDateStr = endDate.toISOString().slice(0, 10);
+    // Delete existing events in the sync range for this source.
+    // Use the actual min/max start_time from incoming events to define the range,
+    // so we exactly cover what the client is sending. This avoids timezone-related
+    // edge cases where the server's "today" doesn't match the client's range.
+    const startTimes = events
+      .filter((e: any) => e.start_time)
+      .map((e: any) => e.start_time as string);
 
-    // Delete existing events in the sync range for this source
-    await run(
-      'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time < ?',
-      [source.id, todayStr, endDateStr]
-    );
+    if (startTimes.length > 0) {
+      const minStart = startTimes.reduce((a: string, b: string) => a < b ? a : b);
+      const maxStart = startTimes.reduce((a: string, b: string) => a > b ? a : b);
+      // Add 1 second past max to make the range inclusive
+      await run(
+        'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time <= ?',
+        [source.id, minStart, maxStart]
+      );
+    }
 
     // Insert new events
     let inserted = 0;

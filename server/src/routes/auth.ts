@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { queryOne, run, User } from '../database';
+import { query, queryOne, run, User } from '../database';
 import { AuthRequest, requireAuth, generateToken } from '../middleware/auth';
 
 const router = Router();
@@ -24,8 +24,15 @@ router.post('/register', async (req, res) => {
   }
 
   try {
+    // First user becomes admin automatically
+    const existingUsers = await query<{ id: number }>('SELECT id FROM users LIMIT 1');
+    const isFirstUser = existingUsers.length === 0;
+
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = await run('INSERT INTO users (email, password_hash) VALUES (?, ?)', [email, passwordHash]);
+    const result = await run(
+      'INSERT INTO users (email, password_hash, is_admin) VALUES (?, ?, ?)',
+      [email, passwordHash, isFirstUser ? 1 : 0]
+    );
 
     const token = generateToken(result.lastInsertRowid);
 

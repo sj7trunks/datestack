@@ -225,6 +225,8 @@ export async function initDatabase(): Promise<any> {
       );
       if (result.rows.length === 0) {
         await pgPool.query('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE');
+        // Auto-promote first user to admin
+        await pgPool.query('UPDATE users SET is_admin = TRUE WHERE id = (SELECT MIN(id) FROM users)');
       }
     } catch (e) {
       // Column likely already exists
@@ -277,6 +279,8 @@ export async function initDatabase(): Promise<any> {
     const hasIsAdmin = columns.some((col: any) => col[1] === 'is_admin');
     if (!hasIsAdmin) {
       sqliteDb.run('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE');
+      // Auto-promote first user to admin
+      sqliteDb.run('UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users)');
     }
   } catch (e) {
     // Column likely already exists

@@ -34,7 +34,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Timezone aware** — Auto-detects browser timezone, shows local time when traveling
 
 ### Admin Panel
-- **Role-based admin** — Admin users are marked with `is_admin` column in the users table. Set via direct DB update or preserved across restores by email match.
+- **Role-based admin** — Admin users are marked with `is_admin` column in the users table. The first registered user is automatically promoted to admin. Existing DBs auto-promote the earliest user when the column is first added via migration.
 - **Admin link** — "Admin" link appears in the Calendar header only for admin users
 - **User management** — View all users with email, join date, event count, and admin badge. Reset any user's password inline.
 - **Database backup** — Download backup from the browser (JSON for PostgreSQL, .db file for SQLite)
@@ -51,9 +51,9 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Client-authoritative dates** — The server never computes "today" for user-facing requests. All API endpoints that need a date (`GET /api/agenda`, `POST /api/agenda`, `POST /api/agenda/rollover`) require the client to send the date explicitly. This prevents UTC vs local timezone mismatches.
 - **Browser auto-detection** — The frontend uses `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect the user's timezone automatically. No hardcoded timezone.
 - **Local time strings for API queries** — Frontend sends event queries using local time format (`yyyy-MM-dd'T'HH:mm:ss`) instead of UTC ISO strings. This ensures all-day events (stored as `T00:00:00`) are correctly matched regardless of timezone offset.
-- **Server sync cleanup** — Uses date-only strings (`YYYY-MM-DD`) for the delete range with `>=` and `<` operators. This ensures reliable comparison on both SQLite (string comparison) and PostgreSQL (TIMESTAMP casting), avoiding the `T` vs space separator mismatch that previously caused duplicate events to accumulate.
-- **Server `TIMEZONE` env var** — Only used for headless/cron operations (`POST /api/agenda/rollover-all`, sync cleanup) where there is no client. Defaults to `America/Los_Angeles`.
-- **`getToday()` helper** — Server-side helper in `database.ts` that returns today's date string using the `TIMEZONE` env var. Only used by rollover-all and sync cleanup, never for user-facing requests.
+- **Server sync cleanup** — The sync endpoint deletes existing events using the actual min/max `start_time` from the incoming event batch (`>=` min, `<=` max), then re-inserts. This ensures the delete range exactly matches what the client sends, avoiding timezone-related edge cases where a hardcoded server date range missed boundary events and caused duplicates.
+- **Server `TIMEZONE` env var** — Only used for headless/cron operations (`POST /api/agenda/rollover-all`) where there is no client. Defaults to `America/Los_Angeles`.
+- **`getToday()` helper** — Server-side helper in `database.ts` that returns today's date string using the `TIMEZONE` env var. Only used by rollover-all, never for user-facing requests.
 - **UTC timestamp conversion** — Server stores timestamps in UTC. Frontend appends 'Z' suffix when parsing to ensure correct local time display (e.g., sync times in Settings).
 
 ---
