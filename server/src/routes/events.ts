@@ -72,17 +72,19 @@ router.post('/sync', requireApiKey, async (req: AuthRequest, res: Response) => {
       source = (await queryOne<CalendarSource>('SELECT * FROM calendar_sources WHERE id = ?', [result.lastInsertRowid]))!;
     }
 
-    // Calculate the date range for cleanup (14 days from today)
-    // Use local time strings (no Z suffix) to match how events are stored
+    // Calculate the date range for cleanup (today to today + 15 days)
+    // Use date-only strings for reliable comparison on both SQLite and PostgreSQL:
+    // - SQLite compares as strings: '2026-02-12T09:00:00' >= '2026-02-12' works correctly
+    // - PostgreSQL casts to TIMESTAMP: '2026-02-12' becomes '2026-02-12 00:00:00'
     const todayStr = getToday();
-    const startOfToday = todayStr + 'T00:00:00';
-    const futureDateObj = new Date(new Date(todayStr + 'T00:00:00').getTime() + 15 * 24 * 60 * 60 * 1000);
-    const endOfRange = futureDateObj.toISOString().slice(0, 19); // Remove .000Z suffix
+    const endDate = new Date(todayStr + 'T00:00:00Z');
+    endDate.setUTCDate(endDate.getUTCDate() + 15);
+    const endDateStr = endDate.toISOString().slice(0, 10);
 
     // Delete existing events in the sync range for this source
     await run(
-      'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time <= ?',
-      [source.id, startOfToday, endOfRange]
+      'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time < ?',
+      [source.id, todayStr, endDateStr]
     );
 
     // Insert new events
