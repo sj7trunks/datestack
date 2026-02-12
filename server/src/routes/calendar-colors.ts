@@ -30,6 +30,24 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// DELETE /api/calendar-colors/purge - Remove colors for calendars with no events
+router.delete('/purge', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await run(
+      `DELETE FROM calendar_colors WHERE user_id = ? AND calendar_name NOT IN (
+        SELECT DISTINCT e.calendar_name FROM events e
+        INNER JOIN calendar_sources cs ON e.source_id = cs.id
+        WHERE cs.user_id = ? AND e.calendar_name IS NOT NULL
+      )`,
+      [req.user!.id, req.user!.id]
+    );
+    res.json({ purged: result.changes });
+  } catch (error) {
+    console.error('Purge calendar colors error:', error);
+    res.status(500).json({ error: 'Failed to purge unused colors' });
+  }
+});
+
 // PATCH /api/calendar-colors/:name - Set color for a calendar_name
 router.patch('/:name', requireAuth, async (req: AuthRequest, res: Response) => {
   const calendarName = decodeURIComponent(req.params.name);

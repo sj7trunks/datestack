@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
+import Admin from './pages/Admin'
 import Availability from './pages/Availability'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -72,6 +73,11 @@ export default function App() {
       <Route path="/settings" element={
         <ProtectedRoute>
           <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          <Admin />
         </ProtectedRoute>
       } />
       <Route path="/availability/:token" element={<Availability />} />

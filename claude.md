@@ -13,7 +13,7 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **14-day horizon** — Always see two weeks ahead
 - **Behind firewalls** — Client pushes data out, so corporate firewalls aren't a problem
 - **All-day events** — All-day events are detected by datetime format (date-only = all-day) and displayed above timed events
-- **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings). Settings page only shows calendars that have events.
+- **Color-coded calendars** — Each individual calendar gets its own color (auto-assigned on first sync, customizable per-calendar in Settings). Settings page only shows calendars that have events. "Purge unused colors" button cleans up stale entries.
 - **Smart filtering** — Exclude specific calendars or events containing certain keywords (dual filtering: icalBuddy -ec flag + Python post-filter for reliability with multi-day events)
 
 ### Agenda / Task List
@@ -32,6 +32,14 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Expandable notes** — Keep the view clean, expand details when needed
 - **Smart sorting** — Agenda first, then events in chronological order
 - **Timezone aware** — Auto-detects browser timezone, shows local time when traveling
+
+### Admin Panel
+- **First user is admin** — User with `id=1` is automatically the admin (no config needed)
+- **Admin link** — "Admin" link appears in the Calendar header only for the admin user
+- **User management** — View all users with email, join date, and event count. Reset any user's password inline.
+- **Database backup** — Download the SQLite database file from the browser
+- **Database restore** — Upload a .db file to replace the current database (auto-backs up the current DB first)
+- **Admin middleware** — `requireAdmin` middleware in `server/src/middleware/auth.ts` gates all `/api/admin` routes
 
 ### Notifications
 - **ntfy integration** — Push notifications to your phone
@@ -389,17 +397,6 @@ SOFTWARE.
 ---
 
 ## TODO / Future Features
-
-### Settings: Purge Empty Calendars
-- Add API endpoint to get calendars with event counts
-- Add API endpoint to delete a calendar_color entry
-- Add UI in Settings to show calendars and delete button for empty/stale ones
-
-### Database Backup/Restore
-- Add API endpoint `GET /api/admin/backup` to download database file
-- Add API endpoint `POST /api/admin/restore` to upload and restore database
-- Add UI in Settings for backup/restore buttons
-- Consider automatic backups before sync operations
 
 ### Pre-PR Database Backup Hook
 - Add Claude Code hook to automatically backup database before destructive operations

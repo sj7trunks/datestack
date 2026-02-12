@@ -11,6 +11,7 @@ import {
   regenerateShareToken,
   getCalendarColors,
   updateCalendarColor,
+  purgeCalendarColors,
 } from '../api/client'
 import { useTheme } from '../contexts/ThemeContext'
 import Footer from '../components/Footer'
@@ -30,6 +31,7 @@ export default function Settings() {
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState(false)
+  const [purgeResult, setPurgeResult] = useState<number | null>(null)
 
   const { data: apiKeys = [], isLoading: keysLoading } = useQuery({
     queryKey: ['apiKeys'],
@@ -51,6 +53,15 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendarColors'] })
       queryClient.invalidateQueries({ queryKey: ['events'] })
+    },
+  })
+
+  const purgeColorsMutation = useMutation({
+    mutationFn: purgeCalendarColors,
+    onSuccess: (data) => {
+      setPurgeResult(data.purged)
+      queryClient.invalidateQueries({ queryKey: ['calendarColors'] })
+      setTimeout(() => setPurgeResult(null), 3000)
     },
   })
 
@@ -310,6 +321,20 @@ export default function Settings() {
               ))}
             </div>
           )}
+
+          {purgeResult !== null && (
+            <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md text-sm text-green-800 dark:text-green-300">
+              Purged {purgeResult} unused color{purgeResult !== 1 ? 's' : ''}.
+            </div>
+          )}
+
+          <button
+            onClick={() => purgeColorsMutation.mutate()}
+            disabled={purgeColorsMutation.isPending}
+            className="mt-3 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          >
+            {purgeColorsMutation.isPending ? 'Purging...' : 'Purge unused colors'}
+          </button>
         </section>
 
         {/* Availability Sharing Section */}

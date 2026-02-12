@@ -17,6 +17,7 @@ export interface User {
   id: number;
   email: string;
   created_at?: string;
+  is_admin?: boolean;
 }
 
 export async function login(email: string, password: string): Promise<{ user: User }> {
@@ -280,5 +281,67 @@ export interface PublicAvailability {
 
 export async function getPublicAvailability(token: string): Promise<PublicAvailability> {
   const response = await fetch(`${API_BASE}/availability/public/${token}`);
+  return handleResponse(response);
+}
+
+// Admin API
+export interface AdminUser {
+  id: number;
+  email: string;
+  created_at: string;
+  event_count: number;
+}
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  const response = await fetch(`${API_BASE}/admin/users`, {
+    credentials: 'include',
+  });
+  return handleResponse(response);
+}
+
+export async function resetUserPassword(userId: number, password: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ password }),
+  });
+  return handleResponse(response);
+}
+
+export async function downloadBackup(): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/backup`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Download failed' }));
+    throw new Error((data as ApiError).error || 'Download failed');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `datestack-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function restoreDatabase(file: File): Promise<{ message: string; backup: string }> {
+  const formData = new FormData();
+  formData.append('database', file);
+  const response = await fetch(`${API_BASE}/admin/restore`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  return handleResponse(response);
+}
+
+// Purge unused calendar colors
+export async function purgeCalendarColors(): Promise<{ purged: number }> {
+  const response = await fetch(`${API_BASE}/calendar-colors/purge`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
   return handleResponse(response);
 }

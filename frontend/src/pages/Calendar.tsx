@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, addDays, startOfDay, isSameDay } from 'date-fns'
-import { getEvents, getAgendaItems, rolloverAgenda, logout } from '../api/client'
+import { getEvents, getAgendaItems, rolloverAgenda, logout, getCurrentUser } from '../api/client'
 import CalendarView from '../components/CalendarView'
 import Footer from '../components/Footer'
 
@@ -22,6 +22,11 @@ export default function Calendar() {
   const [startDate, setStartDate] = useState(() => startOfDay(new Date()))
   const [viewDays, setViewDays] = useState<ViewDays>(getDefaultViewDays)
   const [timezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const { data: currentUser } = useQuery({
+    queryKey: ['user'],
+    queryFn: getCurrentUser,
+    retry: false,
+  })
   const rolledOver = useRef(false)
 
   // Rollover incomplete past agenda items to today on page load
@@ -111,6 +116,14 @@ export default function Calendar() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white">DateStack</h1>
             <div className="flex items-center gap-3">
+              {currentUser?.is_admin && (
+                <Link
+                  to="/admin"
+                  className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 to="/settings"
                 className="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"

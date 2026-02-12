@@ -12,6 +12,7 @@ import eventsRoutes from './routes/events';
 import agendaRoutes from './routes/agenda';
 import availabilityRoutes from './routes/availability';
 import calendarColorsRoutes from './routes/calendar-colors';
+import adminRoutes from './routes/admin';
 import healthRoutes from './routes/health';
 
 const app = express();
@@ -36,6 +37,7 @@ app.use('/api/events', eventsRoutes);
 app.use('/api/agenda', agendaRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/calendar-colors', calendarColorsRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/health', healthRoutes);
 
 // Serve static frontend in production

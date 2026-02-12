@@ -259,6 +259,24 @@ export function saveDatabase(): void {
   fs.writeFileSync(dbPath, buffer);
 }
 
+// --- Reload database (SQLite only, for restore) ---
+
+export async function reloadDatabase(): Promise<void> {
+  if (isPg) return;
+  sqliteDb = null;
+  await initDatabase();
+}
+
+// --- Get database path (SQLite only) ---
+
+export function getDatabasePath(): string {
+  return dbPath;
+}
+
+export function isPostgres(): boolean {
+  return isPg;
+}
+
 // --- Get database instance ---
 
 export function getDb(): any {
