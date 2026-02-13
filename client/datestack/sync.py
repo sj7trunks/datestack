@@ -8,6 +8,7 @@ from dateutil import parser as dateparser
 import requests
 
 from .config import load_config, validate_config
+from .agenda import APIError, handle_response_error
 
 
 # Regex to strip ANSI escape codes
@@ -338,20 +339,25 @@ def sync_to_server(events: list[dict], config: dict) -> dict:
     api_key = config["server"]["api_key"]
     source_name = config["calendar"]["source_name"]
 
-    response = requests.post(
-        f"{server_url}/api/events/sync",
-        json={
-            "source_name": source_name,
-            "events": events,
-        },
-        headers={
-            "X-API-Key": api_key,
-            "Content-Type": "application/json",
-        },
-        timeout=30,
-    )
+    try:
+        response = requests.post(
+            f"{server_url}/api/events/sync",
+            json={
+                "source_name": source_name,
+                "events": events,
+            },
+            headers={
+                "X-API-Key": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+    except requests.exceptions.ConnectionError:
+        raise APIError(f"Connection failed: Could not connect to {server_url}")
+    except requests.exceptions.Timeout:
+        raise APIError(f"Connection timed out: Server at {server_url} did not respond")
 
-    response.raise_for_status()
+    handle_response_error(response)
     return response.json()
 
 

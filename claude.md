@@ -359,6 +359,12 @@ datestack config show       # Display current config
 datestack config test       # Test server connection
 ```
 
+### Client Error Handling
+- **APIError class** — Custom exception in `client/datestack/agenda.py` with `message` and `status_code` attributes
+- **Server error extraction** — `handle_response_error()` extracts error messages from JSON responses (`error` or `message` fields)
+- **User-friendly messages** — Common HTTP errors (401, 403, 404, 400, 5xx) display helpful descriptions instead of raw status codes
+- **Connection handling** — Connection failures and timeouts show clear messages with the server URL
+
 ---
 
 ## Getting Help
