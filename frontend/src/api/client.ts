@@ -45,6 +45,13 @@ export async function logout(): Promise<void> {
     method: 'POST',
     credentials: 'include',
   });
+  // If behind Authentik, redirect to IDP logout to end the SSO session.
+  // The AUTHENTIK_LOGOUT_URL is injected at build time; if not set, fall through
+  // to the normal local logout behavior.
+  const authentikLogoutUrl = (window as any).__AUTHENTIK_LOGOUT_URL__;
+  if (authentikLogoutUrl) {
+    window.location.href = authentikLogoutUrl;
+  }
 }
 
 export async function getCurrentUser(): Promise<User> {

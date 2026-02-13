@@ -49,7 +49,9 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **First user is admin** — The first user auto-created via Authentik is promoted to admin, same as with manual registration
 - **Headers used** — `X-authentik-email` (required for auto-login). Additional headers like `X-authentik-username`, `X-authentik-name`, `X-authentik-groups` are forwarded by Traefik but not currently consumed by the app
 - **Traefik integration** — The forward auth middleware is defined in docker-compose.yml labels on the datestack service, pointing to `http://authentik-server:9000/outpost.goauthentik.io/auth/traefik`
-- **No code changes needed for normal use** — In development without Authentik, the middleware is a no-op since no `X-authentik-email` header is present
+- **IDP logout** — When `AUTHENTIK_HOST` env var is set, the server injects `window.__AUTHENTIK_LOGOUT_URL__` into the served HTML at runtime. The frontend `logout()` function in `api/client.ts` checks for this and redirects to the Authentik invalidation flow, ending the SSO session. Without the env var, logout clears the local JWT cookie only (normal standalone behavior)
+- **API key bypass** — Requests with `X-Api-Key` header (client sync) bypass Authentik forward auth entirely via a separate higher-priority Traefik router
+- **No code changes needed for normal use** — In development without Authentik, the middleware is a no-op since no `X-authentik-email` header is present and `AUTHENTIK_HOST` is unset
 
 ### Notifications
 - **ntfy integration** — Push notifications to your phone

@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'fs';
 
 import { initDatabase } from './database';
 import { authentikAutoLogin } from './middleware/auth';
@@ -47,10 +48,19 @@ if (process.env.NODE_ENV === 'production') {
   const frontendPath = path.join(__dirname, '../frontend/dist');
   app.use(express.static(frontendPath));
 
+  // Read index.html once and inject runtime config (Authentik logout URL, etc.)
+  const indexHtml = fs.readFileSync(path.join(frontendPath, 'index.html'), 'utf-8');
+  const authentikHost = process.env.AUTHENTIK_HOST;
+  const runtimeConfig = authentikHost
+    ? `<script>window.__AUTHENTIK_LOGOUT_URL__="${authentikHost}/if/flow/default-invalidation-flow/";</script>`
+    : '';
+  const injectedHtml = indexHtml.replace('</head>', `${runtimeConfig}</head>`);
+
   // Handle client-side routing
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/health')) {
-      res.sendFile(path.join(frontendPath, 'index.html'));
+      res.set('Content-Type', 'text/html');
+      res.send(injectedHtml);
     }
   });
 }
