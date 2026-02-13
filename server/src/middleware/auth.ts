@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { queryOne, User, ApiKey } from '../database';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { queryOne, query, run, User, ApiKey } from '../database';
 
 const SECRET_KEY = process.env.SECRET_KEY || 'development-secret-key';
 
@@ -158,4 +160,63 @@ export function requireSystemKey(req: Request, res: Response, next: NextFunction
   }
 
   next();
+}
+
+// Middleware: Authentik forward auth auto-login
+// When placed early in the middleware chain, this checks for Authentik headers
+// (X-authentik-email, X-authentik-username, X-authentik-name) passed by the
+// reverse proxy after Authentik forward auth. If present and no valid JWT cookie
+// exists, it auto-creates the user in the database and sets the JWT cookie.
+// This is transparent — if no Authentik headers are present, it does nothing
+// and the normal login flow works as usual.
+export function authentikAutoLogin(req: AuthRequest, res: Response, next: NextFunction) {
+  const authentikEmail = req.headers['x-authentik-email'] as string;
+  if (!authentikEmail) {
+    return next();
+  }
+
+  // If user already has a valid JWT cookie, skip auto-login
+  const existingToken = req.cookies?.token;
+  if (existingToken) {
+    const decoded = verifyToken(existingToken);
+    if (decoded) {
+      return next();
+    }
+  }
+
+  // Auto-create or find the user, then set JWT cookie
+  queryOne<User>('SELECT * FROM users WHERE email = ?', [authentikEmail])
+    .then(async (user) => {
+      if (!user) {
+        // Generate a random password hash (user will never use it — auth is via Authentik)
+        const randomPassword = crypto.randomBytes(32).toString('hex');
+        const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+        // Check if this is the first user (auto-promote to admin)
+        // Uses same pattern as routes/auth.ts register endpoint
+        const existingUsers = await query<{ id: number }>('SELECT id FROM users LIMIT 1', []);
+        const isFirst = existingUsers.length === 0;
+
+        await run(
+          'INSERT INTO users (email, password_hash, is_admin) VALUES (?, ?, ?)',
+          [authentikEmail, passwordHash, isFirst ? 1 : 0]
+        );
+        user = await queryOne<User>('SELECT * FROM users WHERE email = ?', [authentikEmail]);
+      }
+
+      if (user) {
+        const token = generateToken(user.id);
+        res.cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+      }
+      next();
+    })
+    .catch((err) => {
+      console.error('Authentik auto-login error:', err);
+      next();
+    });
 }

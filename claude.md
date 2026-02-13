@@ -42,6 +42,15 @@ DateStack aggregates calendar events from multiple Mac computers (using icalBudd
 - **Cross-backend restore** — SQLite backups can be restored into PostgreSQL (tables are read via sql.js and imported row-by-row with sequence resets)
 - **Admin middleware** — `requireAdmin` middleware in `server/src/middleware/auth.ts` checks `is_admin` column and gates all `/api/admin` routes
 
+### External Authentication (Authentik / Forward Auth)
+- **Transparent auto-login** — When deployed behind Authentik (or any forward auth proxy that sets `X-authentik-email`), users are automatically created and logged in without seeing the DateStack login page
+- **Dual-mode support** — Both internal auth (email/password) and external auth (Authentik headers) work simultaneously. If no Authentik headers are present, the normal login flow is used
+- **How it works** — The `authentikAutoLogin` middleware in `server/src/middleware/auth.ts` runs early in the Express pipeline. It checks for the `X-authentik-email` header. If present and no valid JWT cookie exists, it auto-creates the user in the database (with a random unusable password) and sets the JWT cookie. Subsequent requests use the cookie as normal
+- **First user is admin** — The first user auto-created via Authentik is promoted to admin, same as with manual registration
+- **Headers used** — `X-authentik-email` (required for auto-login). Additional headers like `X-authentik-username`, `X-authentik-name`, `X-authentik-groups` are forwarded by Traefik but not currently consumed by the app
+- **Traefik integration** — The forward auth middleware is defined in docker-compose.yml labels on the datestack service, pointing to `http://authentik-server:9000/outpost.goauthentik.io/auth/traefik`
+- **No code changes needed for normal use** — In development without Authentik, the middleware is a no-op since no `X-authentik-email` header is present
+
 ### Notifications
 - **ntfy integration** — Push notifications to your phone
 - **Configurable timing** — Default 5 minutes before events

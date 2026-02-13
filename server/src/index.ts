@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 
 import { initDatabase } from './database';
+import { authentikAutoLogin } from './middleware/auth';
 import authRoutes from './routes/auth';
 import keysRoutes from './routes/keys';
 import sourcesRoutes from './routes/sources';
@@ -28,6 +29,7 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+app.use(authentikAutoLogin);
 
 // API Routes
 app.use('/api/auth', authRoutes);
