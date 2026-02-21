@@ -43,6 +43,12 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV DATABASE_URL=/app/data/datestack.db
 
+# Run as non-root user for security
+RUN addgroup --system --gid 1001 datestack && \
+    adduser --system --uid 1001 --ingroup datestack datestack && \
+    chown -R datestack:datestack /app
+USER datestack
+
 # Expose port
 EXPOSE 8080
 
