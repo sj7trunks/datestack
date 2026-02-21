@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import initSqlJs from 'sql.js';
 import { query, run, saveDatabase, reloadDatabase, getDatabasePath, isPostgres } from '../database';
-import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth';
+import { AuthRequest, requireAuth, requireAdmin, validatePasswordStrength } from '../middleware/auth';
 
 const router = Router();
 
@@ -90,8 +90,9 @@ router.post('/users/:id/reset-password', async (req: AuthRequest, res: Response)
   const userId = parseInt(req.params.id, 10);
   const { password } = req.body;
 
-  if (!password || password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const passwordCheck = validatePasswordStrength(password);
+  if (!passwordCheck.valid) {
+    return res.status(400).json({ error: passwordCheck.error });
   }
 
   try {

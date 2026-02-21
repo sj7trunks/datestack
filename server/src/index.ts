@@ -68,9 +68,27 @@ if (process.env.NODE_ENV === 'production') {
   // Read index.html once and inject runtime config (Authentik logout URL, etc.)
   const indexHtml = fs.readFileSync(path.join(frontendPath, 'index.html'), 'utf-8');
   const authentikHost = process.env.AUTHENTIK_HOST;
-  const runtimeConfig = authentikHost
-    ? `<script>window.__AUTHENTIK_LOGOUT_URL__=${JSON.stringify(authentikHost.replace(/[<>"']/g, '') + "/if/flow/default-invalidation-flow/")};</script>`
-    : '';
+
+  // Validate AUTHENTIK_HOST as a proper URL to prevent XSS injection
+  let runtimeConfig = '';
+  if (authentikHost) {
+    try {
+      const parsed = new URL(authentikHost);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('Invalid protocol');
+      }
+      // Use the validated/normalized origin to construct a safe URL
+      const safeLogoutUrl = parsed.origin + '/if/flow/default-invalidation-flow/';
+      // Escape HTML-sensitive characters in the JSON string for safe <script> embedding
+      const jsonSafe = JSON.stringify(safeLogoutUrl)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026');
+      runtimeConfig = `<script>window.__AUTHENTIK_LOGOUT_URL__=${jsonSafe};</script>`;
+    } catch {
+      console.error('WARNING: AUTHENTIK_HOST is not a valid URL, skipping runtime config injection:', authentikHost);
+    }
+  }
   const injectedHtml = indexHtml.replace('</head>', `${runtimeConfig}</head>`);
 
   // Handle client-side routing

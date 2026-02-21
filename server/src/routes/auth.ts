@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { query, queryOne, run, User } from '../database';
-import { AuthRequest, requireAuth, generateToken, generateRefreshToken, getAccessCookieOptions, getRefreshCookieOptions } from '../middleware/auth';
+import { AuthRequest, requireAuth, generateToken, generateRefreshToken, getAccessCookieOptions, getRefreshCookieOptions, verifyRefreshToken, validatePasswordStrength } from '../middleware/auth';
 
 const router = Router();
 
@@ -39,8 +39,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Invalid email format' });
   }
 
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const passwordCheck = validatePasswordStrength(password);
+  if (!passwordCheck.valid) {
+    return res.status(400).json({ error: passwordCheck.error });
   }
 
   // Check if user already exists
@@ -119,9 +120,54 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 // POST /api/auth/logout - Clear auth cookies
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
-  res.clearCookie('refreshToken');
+  res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/' });
+  res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/' });
   res.json({ message: 'Logged out successfully' });
+});
+
+// Rate limiter for refresh endpoint to prevent token generation abuse
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 10, // 10 refresh attempts per minute
+  message: { error: 'Too many refresh attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+});
+
+// POST /api/auth/refresh - Exchange refresh token for new token pair
+router.post('/refresh', refreshLimiter, async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Refresh token required' });
+  }
+
+  const decoded = verifyRefreshToken(refreshToken);
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+
+  try {
+    const user = await queryOne<User>('SELECT * FROM users WHERE id = ?', [decoded.userId]);
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Rotate tokens
+    const newAccessToken = generateToken(user.id);
+    const newRefreshToken = generateRefreshToken(user.id);
+    res.cookie('token', newAccessToken, getAccessCookieOptions());
+    res.cookie('refreshToken', newRefreshToken, getRefreshCookieOptions());
+
+    res.json({
+      message: 'Token refreshed successfully',
+      user: { id: user.id, email: user.email },
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
 });
 
 // GET /api/auth/me - Get current user info
