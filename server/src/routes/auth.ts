@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { query, queryOne, run, User } from '../database';
-import { AuthRequest, requireAuth, generateToken } from '../middleware/auth';
+import { AuthRequest, requireAuth, generateToken, generateRefreshToken, getAccessCookieOptions, getRefreshCookieOptions } from '../middleware/auth';
 
 const router = Router();
 
@@ -61,13 +61,10 @@ router.post('/register', registerLimiter, async (req, res) => {
     );
 
     const token = generateToken(result.lastInsertRowid);
+    const refreshToken = generateRefreshToken(result.lastInsertRowid);
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie('token', token, getAccessCookieOptions());
+    res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 
     res.status(201).json({
       message: 'Account created successfully',
@@ -105,13 +102,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie('token', token, getAccessCookieOptions());
+    res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 
     res.json({
       message: 'Login successful',
@@ -123,9 +117,10 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
-// POST /api/auth/logout - Clear auth cookie
+// POST /api/auth/logout - Clear auth cookies
 router.post('/logout', (req, res) => {
   res.clearCookie('token');
+  res.clearCookie('refreshToken');
   res.json({ message: 'Logged out successfully' });
 });
 

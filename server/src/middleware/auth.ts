@@ -17,8 +17,9 @@ export interface AuthRequest extends Request {
 // Verify JWT token from cookie or Authorization header
 export function verifyToken(token: string): { userId: number } | null {
   try {
-    const decoded = jwt.verify(token, SECRET_KEY) as { userId: number };
-    return decoded;
+    const decoded = jwt.verify(token, SECRET_KEY) as { userId: number; type: string };
+    if (decoded.type !== 'access') return null;
+    return { userId: decoded.userId };
   } catch {
     return null;
   }
