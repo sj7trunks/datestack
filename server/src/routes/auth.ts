@@ -1,16 +1,42 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { query, queryOne, run, User } from '../database';
 import { AuthRequest, requireAuth, generateToken } from '../middleware/auth';
 
 const router = Router();
 
+// BUG-004 FIX: Rate limiting to prevent brute force attacks and registration spam
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 5, // 5 attempts per minute
+  message: { error: 'Too many login attempts. Please try again after a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 3, // 3 registrations per hour per IP
+  message: { error: 'Too many registration attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+});
+
 // POST /api/auth/register - Create new account
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
   }
 
   if (password.length < 8) {
@@ -54,11 +80,17 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login - Authenticate and get token
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
   }
 
   const user = await queryOne<User>('SELECT * FROM users WHERE email = ?', [email]);

@@ -21,14 +21,31 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
 // CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
+// BUG-006 FIX: Reject wildcard '*' origin when credentials are enabled to prevent credential leakage
+const rawCorsOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || ['http://localhost:3000', 'http://localhost:5173'];
+if (rawCorsOrigins.includes('*')) {
+  console.error('FATAL: CORS_ORIGINS contains wildcard "*" which is incompatible with credentials:true. This could lead to credential leakage.');
+  console.error('Please specify explicit origins instead (e.g., "http://localhost:3000,http://example.com").');
+  process.exit(1);
+}
+const corsOrigins = rawCorsOrigins;
 app.use(cors({
   origin: corsOrigins,
   credentials: true,
 }));
 
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0'); // Modern browsers should use CSP instead
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(authentikAutoLogin);
 
@@ -52,7 +69,7 @@ if (process.env.NODE_ENV === 'production') {
   const indexHtml = fs.readFileSync(path.join(frontendPath, 'index.html'), 'utf-8');
   const authentikHost = process.env.AUTHENTIK_HOST;
   const runtimeConfig = authentikHost
-    ? `<script>window.__AUTHENTIK_LOGOUT_URL__="${authentikHost}/if/flow/default-invalidation-flow/";</script>`
+    ? `<script>window.__AUTHENTIK_LOGOUT_URL__=${JSON.stringify(authentikHost.replace(/[<>"']/g, '') + "/if/flow/default-invalidation-flow/")};</script>`
     : '';
   const injectedHtml = indexHtml.replace('</head>', `${runtimeConfig}</head>`);
 

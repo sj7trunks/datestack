@@ -39,6 +39,20 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/', requireAuth, async (req: AuthRequest, res: Response) => {
   const { enabled, start_hour, end_hour, days_ahead } = req.body;
 
+  // Validate numeric ranges
+  if (start_hour !== undefined && (typeof start_hour !== 'number' || start_hour < 0 || start_hour > 23)) {
+    return res.status(400).json({ error: 'start_hour must be a number between 0 and 23' });
+  }
+  if (end_hour !== undefined && (typeof end_hour !== 'number' || end_hour < 0 || end_hour > 23)) {
+    return res.status(400).json({ error: 'end_hour must be a number between 0 and 23' });
+  }
+  if (start_hour !== undefined && end_hour !== undefined && start_hour >= end_hour) {
+    return res.status(400).json({ error: 'start_hour must be less than end_hour' });
+  }
+  if (days_ahead !== undefined && (typeof days_ahead !== 'number' || days_ahead < 1 || days_ahead > 90)) {
+    return res.status(400).json({ error: 'days_ahead must be a number between 1 and 90' });
+  }
+
   try {
     let settings = await queryOne<AvailabilitySettings>(
       'SELECT * FROM availability_settings WHERE user_id = ?',
