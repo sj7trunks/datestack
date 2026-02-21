@@ -21,14 +21,31 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
 // CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
+// BUG-006 FIX: Reject wildcard '*' origin when credentials are enabled to prevent credential leakage
+const rawCorsOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || ['http://localhost:3000', 'http://localhost:5173'];
+if (rawCorsOrigins.includes('*')) {
+  console.error('FATAL: CORS_ORIGINS contains wildcard "*" which is incompatible with credentials:true. This could lead to credential leakage.');
+  console.error('Please specify explicit origins instead (e.g., "http://localhost:3000,http://example.com").');
+  process.exit(1);
+}
+const corsOrigins = rawCorsOrigins;
 app.use(cors({
   origin: corsOrigins,
   credentials: true,
 }));
 
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0'); // Modern browsers should use CSP instead
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(authentikAutoLogin);
 
@@ -51,9 +68,27 @@ if (process.env.NODE_ENV === 'production') {
   // Read index.html once and inject runtime config (Authentik logout URL, etc.)
   const indexHtml = fs.readFileSync(path.join(frontendPath, 'index.html'), 'utf-8');
   const authentikHost = process.env.AUTHENTIK_HOST;
-  const runtimeConfig = authentikHost
-    ? `<script>window.__AUTHENTIK_LOGOUT_URL__="${authentikHost}/if/flow/default-invalidation-flow/";</script>`
-    : '';
+
+  // Validate AUTHENTIK_HOST as a proper URL to prevent XSS injection
+  let runtimeConfig = '';
+  if (authentikHost) {
+    try {
+      const parsed = new URL(authentikHost);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('Invalid protocol');
+      }
+      // Use the validated/normalized origin to construct a safe URL
+      const safeLogoutUrl = parsed.origin + '/if/flow/default-invalidation-flow/';
+      // Escape HTML-sensitive characters in the JSON string for safe <script> embedding
+      const jsonSafe = JSON.stringify(safeLogoutUrl)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026');
+      runtimeConfig = `<script>window.__AUTHENTIK_LOGOUT_URL__=${jsonSafe};</script>`;
+    } catch {
+      console.error('WARNING: AUTHENTIK_HOST is not a valid URL, skipping runtime config injection:', authentikHost);
+    }
+  }
   const injectedHtml = indexHtml.replace('</head>', `${runtimeConfig}</head>`);
 
   // Handle client-side routing

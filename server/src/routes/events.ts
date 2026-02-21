@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { query, queryOne, run, Event, CalendarSource } from '../database';
 import { AuthRequest, requireAuth, requireApiKey } from '../middleware/auth';
 
@@ -8,6 +9,16 @@ interface EventWithSource extends Event {
   source_name: string;
   source_color: string;
 }
+
+// Rate limit for sync endpoint to prevent abuse
+const syncLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 syncs per minute
+  message: { error: 'Too many sync requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.headers['x-api-key'] as string || req.ip || 'unknown',
+});
 
 // GET /api/events - List events
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -50,7 +61,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/events/sync - Bulk sync events from client
-router.post('/sync', requireApiKey, async (req: AuthRequest, res: Response) => {
+router.post('/sync', syncLimiter, requireApiKey, async (req: AuthRequest, res: Response) => {
   const { source_name, events } = req.body;
 
   if (!source_name || !events || !Array.isArray(events)) {
@@ -83,7 +94,6 @@ router.post('/sync', requireApiKey, async (req: AuthRequest, res: Response) => {
     if (startTimes.length > 0) {
       const minStart = startTimes.reduce((a: string, b: string) => a < b ? a : b);
       const maxStart = startTimes.reduce((a: string, b: string) => a > b ? a : b);
-      // Add 1 second past max to make the range inclusive
       await run(
         'DELETE FROM events WHERE source_id = ? AND start_time >= ? AND start_time <= ?',
         [source.id, minStart, maxStart]

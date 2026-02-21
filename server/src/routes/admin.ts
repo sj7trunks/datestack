@@ -5,10 +5,23 @@ import fs from 'fs';
 import path from 'path';
 import initSqlJs from 'sql.js';
 import { query, run, saveDatabase, reloadDatabase, getDatabasePath, isPostgres } from '../database';
-import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth';
+import { AuthRequest, requireAuth, requireAdmin, validatePasswordStrength } from '../middleware/auth';
 
 const router = Router();
-const upload = multer({ dest: '/tmp/datestack-uploads/' });
+
+// BUG-005 FIX: Add file size limit (50MB) and file type validation to prevent DoS and malicious uploads
+const upload = multer({
+  dest: '/tmp/datestack-uploads/',
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/octet-stream', 'application/x-sqlite3', 'application/json'];
+    if (allowed.includes(file.mimetype) || file.originalname.endsWith('.db') || file.originalname.endsWith('.json')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .db and .json backup files are allowed'));
+    }
+  },
+});
 
 // All admin routes require auth + admin
 router.use(requireAuth, requireAdmin);
@@ -23,6 +36,30 @@ const TABLE_ORDER = [
   'calendar_colors',
   'availability_settings',
 ];
+
+// BUG-002 FIX: Schema whitelist to prevent SQL injection via column names in backup restore
+const ALLOWED_COLUMNS: Record<string, string[]> = {
+  users: ['id', 'email', 'password_hash', 'is_admin', 'created_at'],
+  api_keys: ['id', 'user_id', 'key', 'name', 'created_at'],
+  calendar_sources: ['id', 'user_id', 'name', 'color', 'last_sync'],
+  events: ['id', 'source_id', 'external_id', 'title', 'start_time', 'end_time', 'location', 'notes', 'all_day', 'calendar_name'],
+  agenda_items: ['id', 'user_id', 'text', 'date', 'completed', 'completed_at', 'created_at'],
+  calendar_colors: ['id', 'user_id', 'calendar_name', 'color'],
+  availability_settings: ['id', 'user_id', 'enabled', 'start_hour', 'end_hour', 'share_token', 'days_ahead', 'created_at', 'updated_at'],
+};
+
+// Validate that column names from backup data match the known schema
+function validateColumns(table: string, columns: string[]): string[] {
+  const allowed = ALLOWED_COLUMNS[table];
+  if (!allowed) {
+    throw new Error(`Unknown table: ${table}`);
+  }
+  const invalid = columns.filter(col => !allowed.includes(col));
+  if (invalid.length > 0) {
+    throw new Error(`Invalid columns in table "${table}": ${invalid.join(', ')}. Possible SQL injection attempt.`);
+  }
+  return columns;
+}
 
 // GET /api/admin/users - List all users with event counts
 router.get('/users', async (req: AuthRequest, res: Response) => {
@@ -53,8 +90,9 @@ router.post('/users/:id/reset-password', async (req: AuthRequest, res: Response)
   const userId = parseInt(req.params.id, 10);
   const { password } = req.body;
 
-  if (!password || password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const passwordCheck = validatePasswordStrength(password);
+  if (!passwordCheck.valid) {
+    return res.status(400).json({ error: passwordCheck.error });
   }
 
   try {
@@ -154,22 +192,48 @@ router.post('/restore', upload.single('database'), async (req: AuthRequest, res:
         }
       }
 
+      // BUG-005 FIX: Validate backup structure matches expected schema
+      const unknownTables = Object.keys(tables).filter(t => !TABLE_ORDER.includes(t));
+      if (unknownTables.length > 0) {
+        return res.status(400).json({ error: `Backup contains unknown tables: ${unknownTables.join(', ')}` });
+      }
+
+      for (const table of TABLE_ORDER) {
+        const rows = tables[table];
+        if (!rows || rows.length === 0) continue;
+
+        // Validate that rows are plain objects with only allowed columns
+        for (const row of rows) {
+          if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+            return res.status(400).json({ error: `Invalid row data in table "${table}"` });
+          }
+          const cols = Object.keys(row);
+          try {
+            validateColumns(table, cols);
+          } catch (err: any) {
+            return res.status(400).json({ error: err.message });
+          }
+        }
+      }
+
       // Truncate all tables in reverse dependency order
       const reverseTables = [...TABLE_ORDER].reverse();
       for (const table of reverseTables) {
         await run(`DELETE FROM ${table}`, []);
       }
 
-      // Insert rows in dependency order
+      // Insert rows in dependency order (with column validation to prevent SQL injection)
       for (const table of TABLE_ORDER) {
         const rows = tables[table];
         if (!rows || rows.length === 0) continue;
 
         for (const row of rows) {
           const cols = Object.keys(row);
+          // BUG-002 FIX: Validate column names against known schema whitelist
+          const validatedCols = validateColumns(table, cols);
           const vals = Object.values(row);
           await run(
-            `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+            `INSERT INTO ${table} (${validatedCols.join(', ')}) VALUES (${validatedCols.map(() => '?').join(', ')})`,
             vals
           );
         }
